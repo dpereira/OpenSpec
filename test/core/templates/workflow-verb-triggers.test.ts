@@ -31,6 +31,7 @@ const NATURAL_VERB_BY_WORKFLOW: Record<string, string> = {
   verify: 'verify',
   onboard: 'onboard',
   propose: 'propose',
+  models: 'models',
 };
 
 /**
@@ -52,6 +53,8 @@ const DELIBERATE_CLI_PHRASE_CLAIMS: Record<string, string> = {
     'the new-change workflow runs this exact CLI command as its first step, then continues with the artifacts',
   'openspec update change':
     'distinct from `openspec update`, which the update-change description redirects to the CLI command',
+  'openspec models':
+    'the models workflow is the guided wrapper over this exact CLI command: it runs the same show/set/reset actions so calibration and persistence cannot drift apart',
 };
 
 /**

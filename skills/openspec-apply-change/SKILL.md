@@ -24,6 +24,43 @@ Otherwise, with no root, what happens next depends on how this workflow was reac
 
 In both branches, never create the root as a side effect: do not run `openspec init` until the user asks for it, do not hand-create `openspec/` files, and do not let a command create it.
 
+**Delegation tiers**
+
+Use three agent tiers. Pick the smallest tier that fits the unit of work.
+
+- **Planner** — high-end model at high reasoning effort. Owns scope, architecture, dependency decomposition, acceptance criteria, semantic merge/conflict decisions, and final synthesis. Use for ambiguity, cross-cutting choices, and deciding *what* is true or in scope.
+- **Coordinator** — advanced/intermediate model at medium reasoning effort. Owns the authoritative progress state, task ownership, dispatch, joining results, serialized updates to shared state, verification of returned work, and workflow transitions. Use for orchestrating work the planner has already decomposed.
+- **Worker** — economical model at high reasoning effort (or its own default). Executes ONE bounded, fully specified unit: a lookup, a draft, an edit, or a check. **Workers never delegate**, never spawn agents, never select another workflow, never expand scope, and never make unresolved planning decisions. A worker returns blockers instead of guessing.
+
+**Model calibration** — read `models.json` from the resolved OpenSpec root's `openspec/` directory first (the same `root.path` this workflow already resolved; when a store is selected the store root wins). It holds the user's per-tier model and effort choices (`tiers.planner|coordinator|worker` → `{ model, effort }`). If that file is absent, use these advisory defaults; if a configured model is unavailable in this host, say so and fall back to the closest available model at the configured effort rather than blocking.
+
+| Tier | Default model | Effort | Effort ladder for the default |
+| --- | --- | --- | --- |
+| planner | `openai/gpt-6.1-sol` | high | low · medium · high · xhigh · **max** |
+| coordinator | `deepinfra/XiaomiMiMo/MiMo-V2.6-Pro` | high | toggle-only on native providers; where an effort ladder exists its ceiling is **high** (no max) |
+| worker | `openai/gpt-6-luna` | max | none · low · medium · high · xhigh · **max** |
+
+Alternatives that fit the same tier, with their verified ceilings: **Claude Opus 5.5** (low→max), **Gemini 4 Argon** (low·medium·**high** — no max, so "high" is its top), **Claude Haiku 5.5** (low→max), **DeepSeek V4.1 Flash 1017** (none·low·high·**max** — no medium), **MiMo-V2.6-Flash** (same ceiling as MiMo-V2.6-Pro: **high** where an effort ladder exists). Never claim an effort the model's ladder does not list; when unsure, use `high` or the model's `default`.
+
+**Handoffs**
+
+Every delegated prompt must be self-contained. Workers do not see the conversation. Include: the tier and the unit's goal; absolute paths for the project root, the change root, the exact input files, and the exact output file(s); the relevant context, rules, and acceptance criteria; any files the unit owns or must NOT touch; how to verify completion; and an explicit stop condition. Say in one line what to return: a changed-path list, evidence, or a blocker.
+
+**Parallelism**
+
+- **Fan out** every independent unit concurrently. Independence means disjoint file ownership AND no data/state dependency on another in-flight unit.
+- **Sequence** dependent units: finish the producer, hand its output to the next tier explicitly, then run the consumer. A dependency is a reason to await a previous agent — not a reason to collapse everything into one agent.
+- Dispatch all independent workers in one wave, then **join every started worker** before touching shared state (task checkboxes, status output, spec files, archive moves). Never release dependent work from a partially completed wave.
+- Cap concurrency to what the host can actually run in parallel; when in doubt, prefer a few large bounded units over many tiny ones.
+
+**Synchronization rules**
+
+- The coordinator owns all checkbox/status updates and shared tracking files. Workers return evidence; they do not edit tracking state.
+- Serialize any two units that write the same file, the same capability's spec, or the same shared resource (services, ports, browser sessions, lockfiles, generated output).
+- When a write target cannot be partitioned cleanly, delegate the *analysis* in parallel and serialize the *writes*.
+- Never run background work across an archive move; every delegate must be joined before the move.
+- A unit that cannot be completed as specified returns a blocker with what it found. Do not silently narrow, defer, or drop specified behavior.
+
 **Input**: Optionally specify a change name (e.g., `/openspec-apply-change add-auth`). If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
 
 **Steps**
@@ -103,11 +140,14 @@ In both branches, never create the root as a side effect: do not run `openspec i
 
 6. **Implement tasks (loop until done or blocked)**
 
-   For each pending task:
+   **Parallel opportunity**: before starting the task loop, group the remaining tasks by dependency and file ownership. Independent tasks with disjoint write sets run concurrently as bounded worker units, each handed its task IDs, context files, acceptance criteria, and owned paths. Sequential handoff is the default for dependent tasks (a consumer waits for its producer's output). Serialize tasks that share a file, a test fixture, a running service, or the task checklist itself. The coordinator joins every unit, re-reads its outputs, verifies the task's stated completion criteria, and only then marks its checkbox. Never parallelize two tasks that edit the same file, and never mark a task complete on a partial result.
+
+   For each pending task (or each worker unit covering one or more pending tasks):
    - Show which task is being worked on
    - Make the code changes required
    - Keep changes minimal and focused
    - Before editing, confirm the checkbox at the returned `sourcePath` and `line` still matches the task description; if it does not, rerun the apply instructions and use the refreshed location
+   - Verify the task's own stated completion criteria (its test, command, observable behavior, or delivered artifact) before marking it done. The coordinator performs the checkbox update, not the worker
    - Mark the task complete at its returned `sourcePath` and `line`: `- [ ]` → `- [x]`
    - Rerun the apply instructions and confirm that task is now done and progress changed
    - Continue to next task
@@ -119,7 +159,11 @@ In both branches, never create the root as a side effect: do not run `openspec i
    - Error or blocker encountered → report and wait for guidance
    - User interrupts
 
-7. **On completion or pause, show status**
+7. **Verify before declaring completion**
+
+   After the last task's checkbox is updated (not before), run the project's required checks: the test suites and commands the tasks and project instructions call for, and any build/type/lint checks that gate this codebase. Independent, safe suites run concurrently; serialize suites that share mutable services, ports, browser sessions, or other state. Gather every result; a failing required check means the affected tasks are not done — reopen the work and pause for guidance rather than reporting success.
+
+8. **On completion or pause, show status**
 
    Display:
    - Tasks completed this session

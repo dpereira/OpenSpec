@@ -8,6 +8,7 @@ import type { SkillTemplate, CommandTemplate } from '../types.js';
 import { optionalWorkflow } from '../optional-workflow.js';
 import { STORE_SELECTION_GUIDANCE } from './store-selection.js';
 import { PROJECT_ROOT_GUARD } from './project-root.js';
+import { DELEGATION_GUIDANCE, DELEGATION_ARTIFACT_WAVES, DELEGATION_PARALLEL_READONLY } from './delegation.js';
 
 /**
  * The implementation handoff. `apply` is not guaranteed to be installed, so
@@ -53,6 +54,12 @@ When the user is ready to implement, they must start the apply workflow explicit
 ${STORE_SELECTION_GUIDANCE}
 
 ${PROJECT_ROOT_GUARD}
+
+${DELEGATION_GUIDANCE}
+
+${DELEGATION_PARALLEL_READONLY}
+
+${DELEGATION_ARTIFACT_WAVES}
 
 **Input**: The user's request should include a change name (kebab-case) OR a description of what they want to build.
 
@@ -219,6 +226,12 @@ When the user is ready to implement, they must start the apply workflow explicit
 ${STORE_SELECTION_GUIDANCE}
 
 ${PROJECT_ROOT_GUARD}
+
+${DELEGATION_GUIDANCE}
+
+${DELEGATION_PARALLEL_READONLY}
+
+${DELEGATION_ARTIFACT_WAVES}
 
 **Input**: The argument after \`/opsx:propose\` is the change name (kebab-case), OR a description of what the user wants to build.
 

@@ -62,6 +62,7 @@ import {
   formatIdeRestart,
 } from './shared/index.js';
 import { getGlobalConfig, type Delivery, type Profile } from './global-config.js';
+import { installOpenCodeTierAssets, removeOpenCodeTierAssets } from './opencode-tier-assets.js';
 import { getProfileWorkflows, CORE_WORKFLOWS, ALL_WORKFLOWS } from './profiles.js';
 import { getAvailableTools } from './available-tools.js';
 import { formatOptionalWorkflowsNote } from './onboarding-commands.js';
@@ -124,6 +125,7 @@ const WORKFLOW_TO_SKILL_DIR: Record<string, string> = {
   'verify': 'openspec-verify-change',
   'onboard': 'openspec-onboard',
   'propose': 'openspec-propose',
+  'models': 'openspec-models',
 };
 
 // -----------------------------------------------------------------------------
@@ -978,6 +980,13 @@ export class InitCommand {
     const deliveryIncludesCommands = delivery !== 'skills';
     const skillTemplates = getSkillTemplates(workflows);
     const commandContents = getCommandContents(workflows);
+
+    // OpenCode additionally gets the managed tier agents and the model-routing
+    // plugin (see core/opencode-tier-assets.ts). They live outside the
+    // skill/command registries and are installed whenever OpenCode is selected.
+    if (tools.some((tool) => tool.value === 'opencode')) {
+      installOpenCodeTierAssets(projectPath);
+    }
 
     // Process each tool
     for (const tool of tools) {

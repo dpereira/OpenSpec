@@ -8,9 +8,9 @@ import {
 
 describe('skill-generation', () => {
   describe('getSkillTemplates', () => {
-    it('should return all 12 skill templates', () => {
+    it('should return all 13 skill templates', () => {
       const templates = getSkillTemplates();
-      expect(templates).toHaveLength(12);
+      expect(templates).toHaveLength(13);
     });
 
     it('should have unique directory names', () => {
@@ -36,6 +36,7 @@ describe('skill-generation', () => {
       expect(dirNames).toContain('openspec-verify-change');
       expect(dirNames).toContain('openspec-onboard');
       expect(dirNames).toContain('openspec-propose');
+      expect(dirNames).toContain('openspec-models');
     });
 
     it('should have valid template structure', () => {
@@ -57,14 +58,15 @@ describe('skill-generation', () => {
       expect(uniqueIds.size).toBe(templates.length);
     });
 
-    it('should filter by workflow IDs when provided', () => {
+    it('should filter by workflow IDs when provided and keep the required utility', () => {
       const filtered = getSkillTemplates(['propose', 'explore', 'apply', 'archive']);
-      expect(filtered).toHaveLength(4);
+      expect(filtered).toHaveLength(5);
       const ids = filtered.map(t => t.workflowId);
       expect(ids).toContain('propose');
       expect(ids).toContain('explore');
       expect(ids).toContain('apply');
       expect(ids).toContain('archive');
+      expect(ids).toContain('models');
       expect(ids).not.toContain('new');
       expect(ids).not.toContain('ff');
     });
@@ -75,23 +77,22 @@ describe('skill-generation', () => {
       expect(noFilter).toHaveLength(all.length);
     });
 
-    it('should return empty array when filter matches nothing', () => {
+    it('should return only the required utility when filter matches nothing', () => {
       const filtered = getSkillTemplates(['nonexistent']);
-      expect(filtered).toHaveLength(0);
+      expect(filtered.map(t => t.workflowId)).toEqual(['models']);
     });
 
-    it('should return single template when filter has one workflow', () => {
+    it('should return the workflow plus the required utility for a single workflow', () => {
       const filtered = getSkillTemplates(['propose']);
-      expect(filtered).toHaveLength(1);
-      expect(filtered[0].workflowId).toBe('propose');
-      expect(filtered[0].dirName).toBe('openspec-propose');
+      expect(filtered).toHaveLength(2);
+      expect(filtered.map(t => t.workflowId)).toEqual(['propose', 'models']);
     });
   });
 
   describe('getCommandTemplates', () => {
-    it('should return all 12 command templates', () => {
+    it('should return all 13 command templates', () => {
       const templates = getCommandTemplates();
-      expect(templates).toHaveLength(12);
+      expect(templates).toHaveLength(13);
     });
 
     it('should have unique IDs', () => {
@@ -117,16 +118,18 @@ describe('skill-generation', () => {
       expect(ids).toContain('verify');
       expect(ids).toContain('onboard');
       expect(ids).toContain('propose');
+      expect(ids).toContain('models');
     });
 
-    it('should filter by workflow IDs when provided', () => {
+    it('should filter by workflow IDs when provided and keep the required utility', () => {
       const filtered = getCommandTemplates(['propose', 'explore', 'apply', 'archive']);
-      expect(filtered).toHaveLength(4);
+      expect(filtered).toHaveLength(5);
       const ids = filtered.map(t => t.id);
       expect(ids).toContain('propose');
       expect(ids).toContain('explore');
       expect(ids).toContain('apply');
       expect(ids).toContain('archive');
+      expect(ids).toContain('models');
       expect(ids).not.toContain('new');
       expect(ids).not.toContain('ff');
     });
@@ -137,16 +140,16 @@ describe('skill-generation', () => {
       expect(noFilter).toHaveLength(all.length);
     });
 
-    it('should return empty array when filter matches nothing', () => {
+    it('should return only the required utility when filter matches nothing', () => {
       const filtered = getCommandTemplates(['nonexistent']);
-      expect(filtered).toHaveLength(0);
+      expect(filtered.map(t => t.id)).toEqual(['models']);
     });
   });
 
   describe('getCommandContents', () => {
-    it('should return all 12 command contents', () => {
+    it('should return all 13 command contents', () => {
       const contents = getCommandContents();
-      expect(contents).toHaveLength(12);
+      expect(contents).toHaveLength(13);
     });
 
     it('should have valid content structure', () => {
@@ -170,9 +173,9 @@ describe('skill-generation', () => {
       expect(contentIds).toEqual(templateIds);
     });
 
-    it('should filter by workflow IDs when provided', () => {
+    it('should filter by workflow IDs when provided and keep the required utility', () => {
       const filtered = getCommandContents(['propose', 'explore']);
-      expect(filtered).toHaveLength(2);
+      expect(filtered).toHaveLength(3);
       const ids = filtered.map(c => c.id);
       expect(ids).toContain('propose');
       expect(ids).toContain('explore');

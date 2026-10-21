@@ -3,7 +3,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { getGlobalDataDir, registerStore } from '../../src/core/index.js';
-import { ALL_WORKFLOWS, CORE_WORKFLOWS } from '../../src/core/profiles.js';
+import { ALL_WORKFLOWS, CORE_WORKFLOWS, withRequiredUtilities } from '../../src/core/profiles.js';
 import { getSkillTemplates } from '../../src/core/shared/skill-generation.js';
 import { createOpenSpecRoot } from '../helpers/openspec-fixtures.js';
 import { runCLI } from '../helpers/run-cli.js';
@@ -44,7 +44,7 @@ describe('profile handoff CLI regressions (#1734)', () => {
     const files = [
       ...(delivery !== 'commands' ? getSkillTemplates(CORE_WORKFLOWS).map(({ dirName }) =>
         path.join(project, '.claude', 'skills', dirName, 'SKILL.md')) : []),
-      ...(delivery !== 'skills' ? CORE_WORKFLOWS.map(id =>
+      ...(delivery !== 'skills' ? withRequiredUtilities(CORE_WORKFLOWS).map(id =>
         path.join(project, '.claude', 'commands', 'opsx', `${id}.md`)) : []),
     ];
     async function assertCore(): Promise<void> {
@@ -54,7 +54,7 @@ describe('profile handoff CLI regressions (#1734)', () => {
       }
       if (delivery !== 'skills') {
         expect((await fs.readdir(path.join(project, '.claude', 'commands', 'opsx'))).sort())
-          .toEqual(CORE_WORKFLOWS.map(id => `${id}.md`).sort());
+          .toEqual(withRequiredUtilities(CORE_WORKFLOWS).map(id => `${id}.md`).sort());
       }
       for (const file of files) {
         const content = await fs.readFile(file, 'utf-8');

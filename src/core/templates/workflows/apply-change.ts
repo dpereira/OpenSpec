@@ -8,6 +8,7 @@ import type { SkillTemplate, CommandTemplate } from '../types.js';
 import { optionalWorkflow } from '../optional-workflow.js';
 import { STORE_SELECTION_GUIDANCE } from './store-selection.js';
 import { PROJECT_ROOT_GUARD } from './project-root.js';
+import { DELEGATION_GUIDANCE, DELEGATION_TASK_EXECUTION } from './delegation.js';
 
 /**
  * `/opsx:continue` is not in the `core` profile, so the blocked-state handoff
@@ -42,6 +43,8 @@ export function getApplyInstructions(): string {
 ${STORE_SELECTION_GUIDANCE}
 
 ${PROJECT_ROOT_GUARD}
+
+${DELEGATION_GUIDANCE}
 
 **Input**: Optionally specify a change name (e.g., \`/opsx:apply add-auth\`). If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
 
@@ -122,11 +125,14 @@ ${PROJECT_ROOT_GUARD}
 
 6. **Implement tasks (loop until done or blocked)**
 
-   For each pending task:
+   ${DELEGATION_TASK_EXECUTION}
+
+   For each pending task (or each worker unit covering one or more pending tasks):
    - Show which task is being worked on
    - Make the code changes required
    - Keep changes minimal and focused
    - Before editing, confirm the checkbox at the returned \`sourcePath\` and \`line\` still matches the task description; if it does not, rerun the apply instructions and use the refreshed location
+   - Verify the task's own stated completion criteria (its test, command, observable behavior, or delivered artifact) before marking it done. The coordinator performs the checkbox update, not the worker
    - Mark the task complete at its returned \`sourcePath\` and \`line\`: \`- [ ]\` → \`- [x]\`
    - Rerun the apply instructions and confirm that task is now done and progress changed
    - Continue to next task
@@ -138,7 +144,11 @@ ${PROJECT_ROOT_GUARD}
    - Error or blocker encountered → report and wait for guidance
    - User interrupts
 
-7. **On completion or pause, show status**
+7. **Verify before declaring completion**
+
+   After the last task's checkbox is updated (not before), run the project's required checks: the test suites and commands the tasks and project instructions call for, and any build/type/lint checks that gate this codebase. Independent, safe suites run concurrently; serialize suites that share mutable services, ports, browser sessions, or other state. Gather every result; a failing required check means the affected tasks are not done — reopen the work and pause for guidance rather than reporting success.
+
+8. **On completion or pause, show status**
 
    Display:
    - Tasks completed this session

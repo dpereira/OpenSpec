@@ -26,6 +26,45 @@ Otherwise, with no root, what happens next depends on how this workflow was reac
 
 In both branches, never create the root as a side effect: do not run `openspec init` until the user asks for it, do not hand-create `openspec/` files, and do not let a command create it.
 
+**Delegation tiers**
+
+Use three agent tiers. Pick the smallest tier that fits the unit of work.
+
+- **Planner** — high-end model at high reasoning effort. Owns scope, architecture, dependency decomposition, acceptance criteria, semantic merge/conflict decisions, and final synthesis. Use for ambiguity, cross-cutting choices, and deciding *what* is true or in scope.
+- **Coordinator** — advanced/intermediate model at medium reasoning effort. Owns the authoritative progress state, task ownership, dispatch, joining results, serialized updates to shared state, verification of returned work, and workflow transitions. Use for orchestrating work the planner has already decomposed.
+- **Worker** — economical model at high reasoning effort (or its own default). Executes ONE bounded, fully specified unit: a lookup, a draft, an edit, or a check. **Workers never delegate**, never spawn agents, never select another workflow, never expand scope, and never make unresolved planning decisions. A worker returns blockers instead of guessing.
+
+**Model calibration** — read `models.json` from the resolved OpenSpec root's `openspec/` directory first (the same `root.path` this workflow already resolved; when a store is selected the store root wins). It holds the user's per-tier model and effort choices (`tiers.planner|coordinator|worker` → `{ model, effort }`). If that file is absent, use these advisory defaults; if a configured model is unavailable in this host, say so and fall back to the closest available model at the configured effort rather than blocking.
+
+| Tier | Default model | Effort | Effort ladder for the default |
+| --- | --- | --- | --- |
+| planner | `openai/gpt-6.1-sol` | high | low · medium · high · xhigh · **max** |
+| coordinator | `deepinfra/XiaomiMiMo/MiMo-V2.6-Pro` | high | toggle-only on native providers; where an effort ladder exists its ceiling is **high** (no max) |
+| worker | `openai/gpt-6-luna` | max | none · low · medium · high · xhigh · **max** |
+
+Alternatives that fit the same tier, with their verified ceilings: **Claude Opus 5.5** (low→max), **Gemini 4 Argon** (low·medium·**high** — no max, so "high" is its top), **Claude Haiku 5.5** (low→max), **DeepSeek V4.1 Flash 1017** (none·low·high·**max** — no medium), **MiMo-V2.6-Flash** (same ceiling as MiMo-V2.6-Pro: **high** where an effort ladder exists). Never claim an effort the model's ladder does not list; when unsure, use `high` or the model's `default`.
+
+**Handoffs**
+
+Every delegated prompt must be self-contained. Workers do not see the conversation. Include: the tier and the unit's goal; absolute paths for the project root, the change root, the exact input files, and the exact output file(s); the relevant context, rules, and acceptance criteria; any files the unit owns or must NOT touch; how to verify completion; and an explicit stop condition. Say in one line what to return: a changed-path list, evidence, or a blocker.
+
+**Parallelism**
+
+- **Fan out** every independent unit concurrently. Independence means disjoint file ownership AND no data/state dependency on another in-flight unit.
+- **Sequence** dependent units: finish the producer, hand its output to the next tier explicitly, then run the consumer. A dependency is a reason to await a previous agent — not a reason to collapse everything into one agent.
+- Dispatch all independent workers in one wave, then **join every started worker** before touching shared state (task checkboxes, status output, spec files, archive moves). Never release dependent work from a partially completed wave.
+- Cap concurrency to what the host can actually run in parallel; when in doubt, prefer a few large bounded units over many tiny ones.
+
+**Synchronization rules**
+
+- The coordinator owns all checkbox/status updates and shared tracking files. Workers return evidence; they do not edit tracking state.
+- Serialize any two units that write the same file, the same capability's spec, or the same shared resource (services, ports, browser sessions, lockfiles, generated output).
+- When a write target cannot be partitioned cleanly, delegate the *analysis* in parallel and serialize the *writes*.
+- Never run background work across an archive move; every delegate must be joined before the move.
+- A unit that cannot be completed as specified returns a blocker with what it found. Do not silently narrow, defer, or drop specified behavior.
+
+**Parallel opportunity**: when the work partitions by output file (for example, delta specs targeting distinct capability paths or main-spec files), delegate one bounded merge per disjoint file and run them concurrently. Group every delta that touches the same file into one serial unit — even when the requirement blocks differ — and join all writers before validation or any move. Ambiguous semantic merges and conflicts go to the planner, not to a worker.
+
 `<capability-path>` is the spec directory relative to `specs/` (for example, `user-auth` or `identity/user-auth`). Preserve the full path from each delta spec when resolving its main spec.
 
 **Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.

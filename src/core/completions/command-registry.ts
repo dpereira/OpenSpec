@@ -430,6 +430,34 @@ export const COMMAND_REGISTRY: CommandDefinition[] = [
     ],
   },
   {
+    name: 'models',
+    description: 'Show or calibrate agent-tier model selection',
+    acceptsPositional: true,
+    positionals: [{ name: 'action', optional: true }],
+    flags: [
+      {
+        name: 'tier',
+        description: 'Tier to set: planner | coordinator | worker',
+        takesValue: true,
+      },
+      {
+        name: 'model',
+        description: 'Host model id for --tier',
+        takesValue: true,
+      },
+      {
+        name: 'effort',
+        description: 'Reasoning effort for --tier',
+        takesValue: true,
+      },
+      {
+        name: 'note',
+        description: 'Optional note recorded with the selection',
+        takesValue: true,
+      },
+    ],
+  },
+  {
     name: 'workset',
     description: 'Compose, keep, and open personal working views (purely local)',
     flags: [],

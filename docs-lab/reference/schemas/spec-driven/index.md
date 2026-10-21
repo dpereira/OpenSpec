@@ -191,7 +191,7 @@ Create one spec file per capability listed in the proposal's Capabilities sectio
 - New capabilities: use the exact path from the proposal at `specs/<capability-path>/spec.md`. Any path segment newly introduced in the proposal must be kebab-case. Follow the project's existing organization; do not add a new domain level when the project uses a flat layout.
 - Modified capabilities: use the exact existing path from `openspec/specs/<capability-path>/` when creating the delta at `specs/<capability-path>/spec.md`. Run `openspec list --specs` to confirm that path before writing the delta, appending `--store "<id>"` only for a registered standalone store - a mistyped or invented path targets a capability that does not exist rather than the one you meant. Do not move or rename the capability.
 
-Write the spec files one at a time, so the user sees progress and an
+Write the spec files incrementally, so the user sees progress and an
 interrupted run keeps the files it already wrote:
 - Before writing anything, compare the capabilities the proposal lists
   with the `specs/<capability-path>/spec.md` files that already exist,
@@ -200,6 +200,12 @@ interrupted run keeps the files it already wrote:
 - Before each file, say in one line which capability you are writing.
 - Write each file as soon as you have drafted it. Do not plan every file
   before writing the first.
+- Independent capabilities may be drafted concurrently by separate
+  workers when they write different files: give each worker its own
+  capability, its exact output path, and the proposal/spec rules, and
+  never let two workers write the same file. Report progress as each
+  file lands, and stop when every capability the proposal lists has its
+  file.
 - Stop when every capability the proposal lists has its file.
 
 There must be at least one spec file unless the change's `.openspec.yaml`
@@ -383,6 +389,10 @@ Guidelines:
 - Each tracked task MUST be a checkbox: `- [ ] X.Y Task description`
 - Tasks should be small enough to complete in one session
 - Order tasks by dependency (what must be done first?)
+- Make each task's dependencies and ownership explicit when they are not
+  obvious: name the files or areas it may change and the task it waits
+  for, so implementation can run independent tasks concurrently and
+  serialize dependent ones. Keep a task's edits inside its stated scope.
 - Track implementation and verification work that can be completed before
   archive. If the requested workflow includes archive or work that requires
   this change to be archived, preserve those steps as plain bullets in an

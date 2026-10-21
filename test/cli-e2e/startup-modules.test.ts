@@ -34,6 +34,7 @@ const COMMAND_IMPLEMENTATIONS: Record<string, string[]> = {
   store: ['commands/store.js'],
   doctor: ['commands/doctor.js'],
   context: ['commands/context.js'],
+  models: ['commands/models.js'],
   workset: ['commands/workset.js'],
   status: ['commands/workflow/status.js'],
   instructions: ['commands/workflow/instructions.js'],

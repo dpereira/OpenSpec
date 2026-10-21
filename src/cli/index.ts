@@ -11,6 +11,7 @@ import { registerSchemaCommand } from './commands/schema.js';
 import { registerStoreCommand } from './commands/store.js';
 import { registerDoctorCommand } from './commands/doctor.js';
 import { registerContextCommand } from './commands/context.js';
+import { registerModelsCommand } from './commands/models.js';
 import { registerWorksetCommand } from './commands/workset.js';
 import { DEFAULT_SCHEMA } from '../commands/workflow/default-schema.js';
 import type {
@@ -579,6 +580,7 @@ registerSchemaCommand(program);
 registerStoreCommand(program);
 registerDoctorCommand(program);
 registerContextCommand(program);
+registerModelsCommand(program);
 registerWorksetCommand(program);
 
 // Top-level validate command
