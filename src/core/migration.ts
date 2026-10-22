@@ -585,9 +585,15 @@ export function migrateIfNeeded(projectPath: string, tools: AIToolOption[]): voi
     return;
   }
 
-  // Scan for installed workflows
+  // Scan for installed workflows. The installed set includes required
+  // utilities (models) alongside selectable workflows; config.workflows is
+  // the user's workflow selection, so record only the selectable ones — a
+  // utility is implicit and would otherwise be presented as a removable
+  // choice in the profile picker.
   const artifacts = scanInstalledWorkflowArtifacts(projectPath, tools, true);
-  const installedWorkflows = artifacts.workflows;
+  const installedWorkflows = artifacts.workflows.filter((workflow) =>
+    (ALL_WORKFLOWS as readonly string[]).includes(workflow)
+  );
 
   if (installedWorkflows.length === 0) {
     // No workflows installed, new user — defaults will apply
