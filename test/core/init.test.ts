@@ -1107,6 +1107,7 @@ describe('InitCommand', () => {
         'openspec-apply-change',
         'openspec-archive-change',
         'openspec-explore',
+        'openspec-models',
         'openspec-propose',
         'openspec-sync-specs',
         'openspec-update-change',
@@ -1734,7 +1735,7 @@ describe('InitCommand', () => {
           const commandFiles = await fs.readdir(commandsDir);
           expect(commandFiles.sort()).toEqual([
             'opsx-apply.md', 'opsx-archive.md', 'opsx-explore.md',
-            'opsx-propose.md', 'opsx-sync.md', 'opsx-update.md',
+            'opsx-models.md', 'opsx-propose.md', 'opsx-sync.md', 'opsx-update.md',
           ]);
           for (const filename of commandFiles) {
             const content = await fs.readFile(path.join(commandsDir, filename), 'utf-8');
@@ -1759,7 +1760,7 @@ describe('InitCommand', () => {
       await initCommand.execute(testDir);
 
       const commandsDir = path.join(testDir, `.${toolId}`, 'commands', 'opsx');
-      const commandIds = ['apply', 'archive', 'explore', 'propose', 'sync', 'update'];
+      const commandIds = ['apply', 'archive', 'explore', 'models', 'propose', 'sync', 'update'];
       expect((await fs.readdir(commandsDir)).sort()).toEqual(commandIds.map((id) => `${id}.toml`));
       for (const commandId of commandIds) {
         const content = parseToml(await fs.readFile(path.join(commandsDir, `${commandId}.toml`), 'utf-8'));
@@ -1778,7 +1779,7 @@ describe('InitCommand', () => {
         await new InitCommand({ tools: 'easycode', force: true }).execute(testDir);
 
         const skillsDir = path.join(testDir, '.easycode', 'skills');
-        for (const skillName of ['openspec-explore', 'openspec-new-change']) {
+        for (const skillName of ['openspec-explore', 'openspec-new-change', 'openspec-models']) {
           expect(await fileExists(path.join(skillsDir, skillName, 'SKILL.md'))).toBe(delivery !== 'commands');
         }
         expect(await fileExists(path.join(skillsDir, 'openspec-propose', 'SKILL.md'))).toBe(false);
@@ -1787,8 +1788,8 @@ describe('InitCommand', () => {
         if (delivery === 'skills') {
           expect(await directoryExists(commandsDir)).toBe(false);
         } else {
-          expect((await fs.readdir(commandsDir)).sort()).toEqual(['explore.toml', 'new.toml']);
-          for (const filename of ['explore.toml', 'new.toml']) {
+          expect((await fs.readdir(commandsDir)).sort()).toEqual(['explore.toml', 'models.toml', 'new.toml']);
+          for (const filename of ['explore.toml', 'models.toml', 'new.toml']) {
             const content = parseToml(await fs.readFile(path.join(commandsDir, filename), 'utf-8'));
             expect(content.description).toEqual(expect.any(String));
             expect(content.prompt).toContain('openspec');

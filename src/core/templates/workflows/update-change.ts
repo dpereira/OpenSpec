@@ -8,6 +8,7 @@ import type { SkillTemplate, CommandTemplate } from '../types.js';
 import { optionalWorkflow } from '../optional-workflow.js';
 import { STORE_SELECTION_GUIDANCE } from './store-selection.js';
 import { PROJECT_ROOT_GUARD } from './project-root.js';
+import { DELEGATION_TIERS, DELEGATION_SEQUENTIAL_WRITES } from './delegation.js';
 
 /**
  * Passages that hand off to `/opsx:continue` or `/opsx:new`. Neither workflow
@@ -82,6 +83,10 @@ export function getUpdateChangeSkillTemplate(): SkillTemplate {
 ${STORE_SELECTION_GUIDANCE}
 
 ${PROJECT_ROOT_GUARD}
+
+${DELEGATION_TIERS}
+
+${DELEGATION_SEQUENTIAL_WRITES}
 
 **Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
 
@@ -182,6 +187,10 @@ export function getOpsxUpdateCommandTemplate(): CommandTemplate {
 ${STORE_SELECTION_GUIDANCE}
 
 ${PROJECT_ROOT_GUARD}
+
+${DELEGATION_TIERS}
+
+${DELEGATION_SEQUENTIAL_WRITES}
 
 **Input**: Optionally specify a change name after \`/opsx:update\` (e.g., \`/opsx:update add-auth\`). If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
 

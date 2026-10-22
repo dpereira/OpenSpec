@@ -39,6 +39,10 @@ The skills come in two sets:
 - **Core**: installed by default, the main planning loop.
 - **Optional**: installed only when you add them, via [Profiles](../customize/profiles.md).
 
+One utility rides along with both sets:
+
+- **Utility**: installed with every profile. `openspec-models` configures delegation rather than performing workflow work.
+
 Every skill expects a project that already uses OpenSpec. Before its first step that writes anything, a skill checks for a resolved root. What happens when there is none depends on how the skill was reached:
 
 - **Auto-selected**: your agent picked the skill on its own, without you naming OpenSpec. It drops OpenSpec and answers your request normally, the way it would with OpenSpec not installed.
@@ -60,6 +64,7 @@ Commands are always the second case. A project whose `openspec/config.yaml` name
 | [openspec-verify-change](#openspec-verify-change) | Check the implementation matches the plan | Optional |
 | [openspec-bulk-archive-change](#openspec-bulk-archive-change) | Archive several change proposals at once | Optional |
 | [openspec-onboard](#openspec-onboard) | Learn the workflow by doing one real change proposal end to end | Optional |
+| [openspec-models](#openspec-models) | Calibrate which models and reasoning efforts delegation uses per tier | Utility |
 
 Each entry below names the skill that owns the next step. When your profile leaves that skill out, the installed files never name it: the handoff becomes the equivalent `openspec` command, or a plain request to you, and a line that exists only to point at a missing skill is not written at all. So the skills you have always hand off to skills you have. Which set you get is [Profiles](../customize/profiles.md).
 
@@ -183,3 +188,15 @@ Learn the workflow by doing one real change proposal end to end.
 | **Arguments** | None. It scans your codebase for small starter tasks and asks you to pick one or describe your own. |
 | **Creates** | A real change proposal for the chosen task, one artifact at a time, then real code once you confirm implementation. Archives the change proposal at the end. |
 | **Response** | A narrated walkthrough of the full cycle with pauses for your input: explore, create, build each artifact, implement, archive. Ends with a recap and a pointer to `openspec-propose`. Takes about 15 to 20 minutes. |
+
+## openspec-models
+
+Calibrate which models and reasoning efforts OpenSpec's delegation tiers use. This skill configures delegation; it does not perform it.
+
+| Contract | Description |
+|---|---|
+| **Arguments** | Optional: `show`, `reset`, or a direct assignment such as `planner=anthropic/claude-opus-5-5 high`. With nothing given it runs an interactive calibration. |
+| **Creates** | `openspec/models.json` in the project's OpenSpec root — nothing else. Never planning artifacts or project code. |
+| **Response** | A tier → model → effort table, the file path, and one of **active now**, **restart required**, or **advisory only** — whether the host actually routes tiers from the file. |
+
+Installed with every profile as a utility. The three tiers are **planner** (scope, architecture, dependency decomposition), **coordinator** (dispatch, joins, shared-state updates, verification), and **worker** (one bounded execution unit, never delegates). When the file is absent the workflows use advisory defaults. Effort ladders are model-specific — Gemini 4 Argon and MiMo-V2.6-Pro top out at `high`, DeepSeek V4.1 Flash 1017 has no `medium` — so the skill only offers efforts the chosen model supports. See [Commands](../../docs/commands.md#opsxmodels) for the tier table and activation states.

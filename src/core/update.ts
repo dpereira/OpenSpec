@@ -46,7 +46,8 @@ import {
 } from './legacy-cleanup.js';
 import { isInteractive } from '../utils/interactive.js';
 import { getGlobalConfig, type Delivery, type Profile } from './global-config.js';
-import { getProfileWorkflows, ALL_WORKFLOWS, CORE_WORKFLOWS } from './profiles.js';
+import { getProfileWorkflows, ALL_WORKFLOWS, ALL_INSTALLABLE_IDS, withRequiredUtilities, CORE_WORKFLOWS, type InstallableId } from './profiles.js';
+import { installOpenCodeTierAssets, removeOpenCodeTierAssets } from './opencode-tier-assets.js';
 import { formatOptionalWorkflowsNote, getOnboardingCommands } from './onboarding-commands.js';
 import { getAvailableTools } from './available-tools.js';
 import {
@@ -88,7 +89,7 @@ const { version: OPENSPEC_VERSION } = require('../../package.json');
  */
 type LegacyUpgradeResult = {
   newlyConfiguredTools: string[];
-  workflowOverrides: Partial<Record<string, readonly (typeof ALL_WORKFLOWS)[number][]>>;
+  workflowOverrides: Partial<Record<string, readonly InstallableId[]>>;
   failedTools?: ToolFailure[];
   deferredGlobalCleanup?: LegacyDetectionResult;
   /**
@@ -180,8 +181,10 @@ export class UpdateCommand {
     const profile = globalConfig.profile ?? 'core';
     const delivery: Delivery = globalConfig.delivery ?? 'both';
     const profileWorkflows = getProfileWorkflows(profile, globalConfig.workflows);
-    const desiredWorkflows = profileWorkflows.filter((workflow): workflow is (typeof ALL_WORKFLOWS)[number] =>
-      (ALL_WORKFLOWS as readonly string[]).includes(workflow)
+    // Utilities (models) are not selectable workflows and must not influence
+    // profile/override decisions; generation adds them unconditionally.
+    const desiredWorkflows = profileWorkflows.filter((workflow): workflow is InstallableId =>
+      (ALL_INSTALLABLE_IDS as readonly string[]).includes(workflow)
     );
 
     // 4. Detect and handle legacy artifacts + upgrade legacy tools using effective config
@@ -318,6 +321,15 @@ export class UpdateCommand {
     let removedSkillCount = 0;
     let removedDeselectedCommandCount = 0;
     let removedDeselectedSkillCount = 0;
+
+    // OpenCode's tier agents and model router are managed alongside its
+    // skills/commands (core/opencode-tier-assets.ts): refresh them whenever
+    // OpenCode is configured, and remove them when it no longer is.
+    if (configuredAndNewTools.includes('opencode')) {
+      installOpenCodeTierAssets(resolvedProjectPath);
+    } else {
+      removeOpenCodeTierAssets(resolvedProjectPath);
+    }
 
     for (const toolId of toolsToUpdate) {
       const tool = AI_TOOLS.find((t) => t.value === toolId);
@@ -609,7 +621,7 @@ export class UpdateCommand {
     projectPath: string,
     toolIds: string[],
     delivery: Delivery,
-    workflowsForTool: (toolId: string) => readonly (typeof ALL_WORKFLOWS)[number][]
+    workflowsForTool: (toolId: string) => readonly InstallableId[]
   ): string[] {
     return toolIds.filter((toolId) => {
       const tool = AI_TOOLS.find((t) => t.value === toolId);
@@ -756,7 +768,7 @@ export class UpdateCommand {
     profileWorkflows: readonly string[]
   ): boolean {
     const installedWorkflows = scanInstalledWorkflows(projectPath, configuredTools);
-    const profileSet = new Set(profileWorkflows);
+    const profileSet = new Set<string>(withRequiredUtilities(profileWorkflows));
     const extraWorkflows = installedWorkflows.filter((w) => !profileSet.has(w));
 
     if (extraWorkflows.length > 0) {
@@ -838,7 +850,7 @@ export class UpdateCommand {
   private async removeSkillDirs(skillsRoot: string, skillsDir: string): Promise<number> {
     let removed = 0;
 
-    for (const workflow of ALL_WORKFLOWS) {
+    for (const workflow of ALL_INSTALLABLE_IDS) {
       const dirName = WORKFLOW_TO_SKILL_DIR[workflow];
       if (!dirName) continue;
 
@@ -863,12 +875,12 @@ export class UpdateCommand {
   private async removeUnselectedSkillDirs(
     skillsRoot: string,
     skillsDir: string,
-    desiredWorkflows: readonly (typeof ALL_WORKFLOWS)[number][]
+    desiredWorkflows: readonly InstallableId[]
   ): Promise<number> {
-    const desiredSet = new Set(desiredWorkflows);
+    const desiredSet = new Set<string>(withRequiredUtilities(desiredWorkflows));
     let removed = 0;
 
-    for (const workflow of ALL_WORKFLOWS) {
+    for (const workflow of ALL_INSTALLABLE_IDS) {
       if (desiredSet.has(workflow)) continue;
       const dirName = WORKFLOW_TO_SKILL_DIR[workflow];
       if (!dirName) continue;
@@ -900,7 +912,7 @@ export class UpdateCommand {
     const adapter = CommandAdapterRegistry.get(toolId);
     if (!adapter) return 0;
 
-    for (const workflow of ALL_WORKFLOWS) {
+    for (const workflow of ALL_INSTALLABLE_IDS) {
       const cmdPath = adapter.getFilePath(workflow);
       const fullPath = FileSystemUtils.resolveProjectArtifactPath(projectPath, cmdPath);
 
@@ -924,16 +936,16 @@ export class UpdateCommand {
   private async removeUnselectedCommandFiles(
     projectPath: string,
     toolId: string,
-    desiredWorkflows: readonly (typeof ALL_WORKFLOWS)[number][]
+    desiredWorkflows: readonly InstallableId[]
   ): Promise<number> {
     let removed = 0;
 
     const adapter = CommandAdapterRegistry.get(toolId);
     if (!adapter) return 0;
 
-    const desiredSet = new Set(desiredWorkflows);
+    const desiredSet = new Set<string>(withRequiredUtilities(desiredWorkflows));
 
-    for (const workflow of ALL_WORKFLOWS) {
+    for (const workflow of ALL_INSTALLABLE_IDS) {
       if (desiredSet.has(workflow)) continue;
       const cmdPath = adapter.getFilePath(workflow);
       const fullPath = FileSystemUtils.resolveProjectArtifactPath(projectPath, cmdPath);
@@ -1034,7 +1046,7 @@ export class UpdateCommand {
    */
   private async handleLegacyCleanup(
     projectPath: string,
-    desiredWorkflows: readonly (typeof ALL_WORKFLOWS)[number][],
+    desiredWorkflows: readonly InstallableId[],
     delivery: Delivery
   ): Promise<LegacyUpgradeResult> {
     // Detect legacy artifacts
@@ -1205,7 +1217,7 @@ export class UpdateCommand {
     projectPath: string,
     detection: LegacyDetectionResult,
     canPrompt: boolean,
-    desiredWorkflows: readonly (typeof ALL_WORKFLOWS)[number][],
+    desiredWorkflows: readonly InstallableId[],
     delivery: Delivery
   ): Promise<LegacyUpgradeResult> {
     // Get tools that had legacy artifacts
@@ -1277,11 +1289,14 @@ export class UpdateCommand {
       }
     }
 
+    // An empty inference must stay empty so the caller can fall back to the
+    // profile's workflows; withRequiredUtilities would turn "nothing inferred"
+    // into the utilities-only set and mask that.
     const inferredCodexWorkflows = getProfileWorkflows(
       'custom',
       getLegacyWorkflowIdsForTool(detection, 'codex')
-    ).filter((workflow): workflow is (typeof ALL_WORKFLOWS)[number] =>
-      (ALL_WORKFLOWS as readonly string[]).includes(workflow)
+    ).filter((workflow): workflow is InstallableId =>
+      (ALL_INSTALLABLE_IDS as readonly string[]).includes(workflow)
     );
 
     // Create skills/commands for selected tools using effective profile+delivery.

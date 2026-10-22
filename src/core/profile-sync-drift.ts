@@ -2,7 +2,7 @@ import path from 'path';
 import * as fs from 'fs';
 import { AI_TOOLS } from './config.js';
 import type { Delivery } from './global-config.js';
-import { ALL_WORKFLOWS } from './profiles.js';
+import { ALL_WORKFLOWS, ALL_INSTALLABLE_IDS, withRequiredUtilities, type InstallableId } from './profiles.js';
 import { CommandAdapterRegistry } from './command-generation/index.js';
 import { getConfiguredTools } from './shared/index.js';
 import {
@@ -20,12 +20,12 @@ import {
   toolSupportsSkills,
 } from './shared/skill-paths.js';
 
-type WorkflowId = (typeof ALL_WORKFLOWS)[number];
+type WorkflowId = InstallableId;
 
 /**
  * Maps workflow IDs to their skill directory names.
  */
-export const WORKFLOW_TO_SKILL_DIR: Record<WorkflowId, string> = {
+export const WORKFLOW_TO_SKILL_DIR: Record<InstallableId, string> = {
   'explore': 'openspec-explore',
   'new': 'openspec-new-change',
   'continue': 'openspec-continue-change',
@@ -38,12 +38,14 @@ export const WORKFLOW_TO_SKILL_DIR: Record<WorkflowId, string> = {
   'verify': 'openspec-verify-change',
   'onboard': 'openspec-onboard',
   'propose': 'openspec-propose',
+  'models': 'openspec-models',
 };
 
 function toKnownWorkflows(workflows: readonly string[]): WorkflowId[] {
-  return workflows.filter(
+  const withUtilities = withRequiredUtilities(workflows);
+  return withUtilities.filter(
     (workflow): workflow is WorkflowId =>
-      (ALL_WORKFLOWS as readonly string[]).includes(workflow)
+      (ALL_INSTALLABLE_IDS as readonly string[]).includes(workflow)
   );
 }
 

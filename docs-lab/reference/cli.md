@@ -50,6 +50,7 @@ Your agent runs most of these during the workflow.
 
 | Command | What it does |
 |---|---|
+| [`openspec models`](#openspec-models) | Show or calibrate agent-tier model selection. |
 | [`openspec version`](#openspec-version) | Report the installed version and optionally check for an update. |
 | [`openspec feedback`](#openspec-feedback) | Submit feedback about OpenSpec. |
 | [`openspec completion`](#openspec-completion) | Install or generate shell completions. |
@@ -2192,6 +2193,67 @@ In an interactive terminal, remove shows the workset and asks you to confirm. Wi
 ```
 Removed workset 'checkout'. Member folders were not touched.
 ```
+
+## openspec models
+
+Shows or calibrates which models and reasoning efforts OpenSpec's delegation
+tiers use. The same persistence backs the `/opsx:models` workflow, so the file
+is validated and written by one implementation rather than by prose.
+
+Selections live in `openspec/models.json`, resolved by walking up from the
+working directory to the nearest `openspec/` home. When the file is absent,
+the advisory defaults apply and no file is created.
+
+```bash
+openspec models                                        # show the effective mapping
+openspec models show --json                            # structured effective mapping
+openspec models set --tier planner \
+  --model openai/gpt-6.1-sol --effort high             # set one tier
+openspec models set --tier worker \
+  --model anthropic/claude-haiku-5-5 --effort high --json
+openspec models reset                                  # remove the file, restoring defaults
+```
+
+**Arguments**
+
+| Argument | Effect |
+|---|---|
+| `[action]` | `show` (default), `set`, or `reset`. |
+
+**Options**
+
+| Flag | Effect |
+|---|---|
+| `--tier <tier>` | Tier to set: `planner`, `coordinator`, or `worker`. |
+| `--model <id>` | Host model id for `--tier`, such as `openai/gpt-6.1-sol`. Model ids are opaque and host-specific. |
+| `--effort <effort>` | Reasoning effort for `--tier`: `default`, `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. `default` keeps the model's own reasoning setting. |
+| `--note <text>` | Optional note recorded with the selection. |
+| `--json` | Print one JSON document instead of text. |
+
+Setting one tier preserves the others. Changing a tier's model or effort drops
+its previous note unless `--note` supplies a new one, since the note describes
+the pairing it was written for.
+
+Effort ladders differ per model — Gemini 4 Argon tops out at `high`,
+MiMo-V2.6-Pro at `high`, DeepSeek V4.1 Flash 1017 has no `medium` — so
+`--effort` accepts only documented values and the workflow offers only efforts
+the chosen model supports. Any model id the host offers is accepted.
+
+**Output**
+
+```text
+Model tier configuration (defaults)
+  file: /home/you/project/openspec/models.json
+  planner      openai/gpt-6.1-sol @ high  (high/xhigh/max; Gemini 4 Argon tops out at high)
+  coordinator  deepinfra/XiaomiMiMo/MiMo-V2.6-Pro @ high  (high is the MiMo ceiling; no max)
+  worker       openai/gpt-6-luna @ max  (none/low/medium/high/xhigh/max)
+
+Valid efforts: default, none, minimal, low, medium, high, xhigh, max
+```
+
+`--json` reports `source` as `defaults` or `project`, the resolved
+`configPath`, and the three `tiers`. A file that exists but cannot be parsed is
+reported as `defaults` with a `problem` field rather than being overwritten.
 
 ## openspec version
 

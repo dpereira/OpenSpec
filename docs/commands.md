@@ -33,7 +33,13 @@ for your tool. The files OpenSpec generates already use the right form.
 | `/opsx:bulk-archive` | Archive multiple changes at once |
 | `/opsx:onboard` | Guided tutorial through the complete workflow |
 
-The default global profile is `core`. To enable expanded workflow commands, run `openspec config profile`, select workflows, then run `openspec update` in your project.
+### Utility Commands (always installed)
+
+| Command | Purpose |
+|---------|---------|
+| `/opsx:models` | Calibrate which models and reasoning efforts delegation uses per tier |
+
+The default global profile is `core`. To enable expanded workflow commands, run `openspec config profile`, select workflows, then run `openspec update` in your project. Utility commands are installed with every profile.
 
 ---
 
@@ -675,6 +681,45 @@ AI:  Welcome to OpenSpec!
 - Uses real code, not toy examples
 - Creates a real change you can keep or discard
 - Takes 15-30 minutes to complete
+
+---
+
+### `/opsx:models`
+
+Calibrate which models and reasoning efforts OpenSpec's three delegation tiers use. Every workflow delegates across **planner** (scope, architecture, dependency decomposition), **coordinator** (dispatch, joins, shared-state updates, verification), and **worker** (one bounded execution unit, never delegates). This command sets the model and reasoning effort for each tier.
+
+Selections are saved to `openspec/models.json` in the project's OpenSpec root and take effect for subsequent delegations. When the file is absent, workflows fall back to the [advisory defaults](#advisory-model-tiers).
+
+**Usage:**
+```
+/opsx:models                          # interactive calibration
+/opsx:models show                     # print the effective mapping
+/opsx:models reset                    # remove the file, restoring defaults
+/opsx:models planner=anthropic/claude-opus-5-5 high
+```
+
+The same persistence is available from the CLI as `openspec models [show|set|reset]`, which the workflow calls so the file is validated and written by one implementation.
+
+**Advisory model tiers**
+
+| Tier | Default model | Effort | Verified effort ladder |
+|------|---------------|--------|------------------------|
+| planner | `openai/gpt-6.1-sol` | high | low · medium · high · xhigh · max |
+| coordinator | `deepinfra/XiaomiMiMo/MiMo-V2.6-Pro` | high | toggle-only natively; **high is the ceiling** where an effort ladder exists (no max) |
+| worker | `openai/gpt-6-luna` | max | none · low · medium · high · xhigh · max |
+
+These are recommendations, not an allow-list: any model the host offers is acceptable. Effort ceilings differ per model — Gemini 4 Argon tops out at **high**, MiMo-V2.6-Pro at **high**, DeepSeek V4.1 Flash 1017 has **no medium** — so the workflow only offers efforts a model actually supports.
+
+**Activation**
+
+- **Active now** — the host routes tiered delegation from the file per dispatch (e.g. the OpenCode tier bridge is installed and loaded). Later delegations in the session use the new selection without restarting.
+- **Restart required** — the native integration was just installed or changed. After one restart, editing only `models.json` is live.
+- **Advisory only** — the host has no native tier routing. Workflows request the configured models/efforts in delegation prompts and report when the host cannot apply them.
+
+**Tips:**
+- Runs anywhere; it never edits planning artifacts or project code
+- Guides, not hard constraints — the model table is a recommendation
+- Reports honestly which of the three activation states applies
 
 ---
 

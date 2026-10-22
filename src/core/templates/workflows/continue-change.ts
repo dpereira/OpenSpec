@@ -8,6 +8,7 @@ import type { SkillTemplate, CommandTemplate } from '../types.js';
 import { optionalWorkflow } from '../optional-workflow.js';
 import { STORE_SELECTION_GUIDANCE } from './store-selection.js';
 import { PROJECT_ROOT_GUARD } from './project-root.js';
+import { DELEGATION_GUIDANCE, DELEGATION_ONE_ARTIFACT } from './delegation.js';
 
 /**
  * The planning-complete handoff. Neither `apply` nor `archive` is guaranteed
@@ -43,6 +44,10 @@ export function getContinueChangeSkillTemplate(): SkillTemplate {
 ${STORE_SELECTION_GUIDANCE}
 
 ${PROJECT_ROOT_GUARD}
+
+${DELEGATION_GUIDANCE}
+
+${DELEGATION_ONE_ARTIFACT}
 
 **Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
 
@@ -169,6 +174,10 @@ export function getOpsxContinueCommandTemplate(): CommandTemplate {
 ${STORE_SELECTION_GUIDANCE}
 
 ${PROJECT_ROOT_GUARD}
+
+${DELEGATION_GUIDANCE}
+
+${DELEGATION_ONE_ARTIFACT}
 
 **Input**: Optionally specify a change name after \`/opsx:continue\` (e.g., \`/opsx:continue add-auth\`). If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
 

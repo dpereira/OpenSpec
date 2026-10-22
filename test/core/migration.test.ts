@@ -136,6 +136,33 @@ describe('migration', () => {
     expect(config.workflows).toEqual(['explore', 'apply']);
   });
 
+  it('records only selectable workflows, never the required models utility', async () => {
+    // models is installed with every profile (see profiles.ts UTILITY_WORKFLOWS),
+    // so a freshly generated install always has it. config.workflows is the
+    // user's workflow *selection* and must not grow a removable utility entry.
+    await writeSkill(projectDir, 'openspec-explore');
+    await writeSkill(projectDir, 'openspec-apply-change');
+    await writeSkill(projectDir, 'openspec-models');
+
+    migrateIfNeeded(projectDir, [ensureClaudeTool()]);
+
+    const config = readRawConfig();
+    expect(config.profile).toBe('custom');
+    expect(config.workflows).toEqual(['explore', 'apply']);
+    expect(config.workflows).not.toContain('models');
+  });
+
+  it('does not migrate when only the required utility is installed', async () => {
+    // A utility alone means no workflows are installed, so defaults apply
+    // rather than a profile holding zero selectable workflows.
+    await writeSkill(projectDir, 'openspec-models');
+
+    migrateIfNeeded(projectDir, [ensureClaudeTool()]);
+
+    // A no-op migration writes nothing: defaults remain in effect.
+    expect(fs.existsSync(getGlobalConfigPath())).toBe(false);
+  });
+
   it('does not migrate when profile is already explicitly configured', async () => {
     saveGlobalConfig({
       featureFlags: {},

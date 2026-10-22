@@ -8,6 +8,7 @@ import type { SkillTemplate, CommandTemplate } from '../types.js';
 import { optionalWorkflow } from '../optional-workflow.js';
 import { STORE_SELECTION_GUIDANCE } from './store-selection.js';
 import { PROJECT_ROOT_GUARD } from './project-root.js';
+import { DELEGATION_GUIDANCE, DELEGATION_PARALLEL_READONLY } from './delegation.js';
 
 const PLANNING_GUIDANCE = `## Planning a Change
 
@@ -86,6 +87,10 @@ export function getExploreSkillTemplate(): SkillTemplate {
 ${STORE_SELECTION_GUIDANCE}
 
 ${PROJECT_ROOT_GUARD}
+
+${DELEGATION_GUIDANCE}
+
+${DELEGATION_PARALLEL_READONLY}
 
 ---
 
@@ -413,6 +418,10 @@ export function getOpsxExploreCommandTemplate(): CommandTemplate {
 ${STORE_SELECTION_GUIDANCE}
 
 ${PROJECT_ROOT_GUARD}
+
+${DELEGATION_GUIDANCE}
+
+${DELEGATION_PARALLEL_READONLY}
 
 **Input**: The argument after \`/opsx:explore\` is whatever the user wants to think about. Could be:
 - A vague idea: "real-time collaboration"

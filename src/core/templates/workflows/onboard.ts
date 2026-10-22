@@ -8,6 +8,7 @@ import type { SkillTemplate, CommandTemplate } from '../types.js';
 import { onlyWithWorkflow, optionalWorkflow } from '../optional-workflow.js';
 import { STORE_SELECTION_GUIDANCE } from './store-selection.js';
 import { PROJECT_ROOT_GUARD } from './project-root.js';
+import { DELEGATION_GUIDANCE, DELEGATION_PARALLEL_READONLY, DELEGATION_TASK_EXECUTION } from './delegation.js';
 
 /**
  * The tutorial names other workflows throughout. Which of them exist depends
@@ -87,6 +88,12 @@ function getOnboardInstructions(): string {
 ${STORE_SELECTION_GUIDANCE}
 
 ${PROJECT_ROOT_GUARD}
+
+${DELEGATION_GUIDANCE}
+
+${DELEGATION_PARALLEL_READONLY}
+
+${DELEGATION_TASK_EXECUTION}
 
 ---
 

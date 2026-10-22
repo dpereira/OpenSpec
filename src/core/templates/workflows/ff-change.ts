@@ -8,6 +8,7 @@ import type { SkillTemplate, CommandTemplate } from '../types.js';
 import { optionalWorkflow } from '../optional-workflow.js';
 import { STORE_SELECTION_GUIDANCE } from './store-selection.js';
 import { PROJECT_ROOT_GUARD } from './project-root.js';
+import { DELEGATION_GUIDANCE, DELEGATION_ARTIFACT_WAVES } from './delegation.js';
 
 /**
  * The implementation handoff, resolved at generation time so a profile
@@ -38,6 +39,10 @@ export function getFfChangeSkillTemplate(): SkillTemplate {
 ${STORE_SELECTION_GUIDANCE}
 
 ${PROJECT_ROOT_GUARD}
+
+${DELEGATION_GUIDANCE}
+
+${DELEGATION_ARTIFACT_WAVES}
 
 **Input**: The user's request should include a change name (kebab-case) OR a description of what they want to build.
 
@@ -158,6 +163,10 @@ export function getOpsxFfCommandTemplate(): CommandTemplate {
 ${STORE_SELECTION_GUIDANCE}
 
 ${PROJECT_ROOT_GUARD}
+
+${DELEGATION_GUIDANCE}
+
+${DELEGATION_ARTIFACT_WAVES}
 
 **Input**: The argument after \`/opsx:ff\` is the change name (kebab-case), OR a description of what the user wants to build.
 

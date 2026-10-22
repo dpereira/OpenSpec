@@ -272,7 +272,7 @@ Old instructions content
 
         const expectedSkills = ['my-custom-skill', 'openspec-user-notes'];
         if (setting === 'profile') {
-          expectedSkills.push('openspec-explore');
+          expectedSkills.push('openspec-explore', 'openspec-models');
         } else {
           const correction = consoleSpy.mock.calls.flat().map(String)
             .find((entry) => entry.includes('No skills or commands remain'));
@@ -3590,7 +3590,7 @@ More user content after markers.
       setMockConfig({ featureFlags: {}, profile: 'custom', delivery: 'commands', workflows: ['explore', 'new'] });
       await updateCommand.execute(testDir);
 
-      expect((await fs.readdir(commandsDir)).sort()).toEqual(['explore.toml', 'new.toml', 'personal.toml']);
+      expect((await fs.readdir(commandsDir)).sort()).toEqual(['explore.toml', 'models.toml', 'new.toml', 'personal.toml']);
       const newCommand = parseToml(await fs.readFile(path.join(commandsDir, 'new.toml'), 'utf-8'));
       expect(newCommand.prompt).toContain('openspec');
       expect(await FileSystemUtils.fileExists(path.join(skillsDir, 'openspec-explore', 'SKILL.md'))).toBe(false);
@@ -3599,7 +3599,7 @@ More user content after markers.
       setMockConfig({ featureFlags: {}, profile: 'custom', delivery: 'skills', workflows: ['explore', 'new'] });
       await updateCommand.execute(testDir);
 
-      expect(await fs.readdir(commandsDir)).toEqual(['personal.toml']);
+      expect((await fs.readdir(commandsDir)).sort()).toEqual(['personal.toml']);
       for (const skillName of ['openspec-explore', 'openspec-new-change']) {
         expect(await fs.readFile(path.join(skillsDir, skillName, 'SKILL.md'), 'utf-8')).toContain(`name: ${skillName}`);
       }
@@ -4129,7 +4129,7 @@ More user content after markers.
 
       const grokDir = path.join(testDir, '.grok');
       const skillsDir = path.join(grokDir, 'skills');
-      expect((await fs.readdir(skillsDir)).sort()).toEqual(['openspec-explore', 'openspec-new-change']);
+      expect((await fs.readdir(skillsDir)).sort()).toEqual(['openspec-explore', 'openspec-models', 'openspec-new-change']);
       const customSkill = path.join(skillsDir, 'openspec-custom', 'SKILL.md');
       await fs.mkdir(path.dirname(customSkill));
       await fs.writeFile(customSkill, 'my custom skill');
@@ -4143,6 +4143,7 @@ More user content after markers.
         'openspec-archive-change',
         'openspec-custom',
         'openspec-explore',
+        'openspec-models',
         'openspec-propose',
         'openspec-sync-specs',
         'openspec-update-change',

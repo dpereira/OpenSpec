@@ -15,7 +15,7 @@ import {
 } from './command-surface.js';
 import { WORKFLOW_TO_SKILL_DIR } from './profile-sync-drift.js';
 import { COMMAND_IDS } from './shared/tool-detection.js';
-import { ALL_WORKFLOWS } from './profiles.js';
+import { ALL_WORKFLOWS, ALL_INSTALLABLE_IDS, withRequiredUtilities, type InstallableId } from './profiles.js';
 import { getSkillReferenceTransformer, getTransformerForTool } from '../utils/command-references.js';
 import { FileSystemUtils } from '../utils/file-system.js';
 import { isSharedSkillTargetActive } from './shared-skill-target.js';
@@ -246,7 +246,7 @@ function migrateSkillDirs(
   let moved = 0;
   let kept = 0;
 
-  for (const workflowId of ALL_WORKFLOWS) {
+  for (const workflowId of ALL_INSTALLABLE_IDS) {
     const dirName = WORKFLOW_TO_SKILL_DIR[workflowId];
     const source = path.join(legacySkillsDir, dirName);
     const sourceSkill = path.join(source, 'SKILL.md');
@@ -482,7 +482,7 @@ function scanInstalledWorkflowArtifacts(
     }
 
     for (const skillsDir of skillsDirs) {
-      for (const workflowId of ALL_WORKFLOWS) {
+      for (const workflowId of ALL_INSTALLABLE_IDS) {
         const skillDirName = WORKFLOW_TO_SKILL_DIR[workflowId];
         const skillFile = path.join(skillsDir, skillDirName, 'SKILL.md');
         if (fs.existsSync(skillFile)) {
@@ -503,7 +503,7 @@ function scanInstalledWorkflowArtifacts(
       ? (LEGACY_TOOL_ROOTS[tool.value] ?? []).map((legacy) => legacy.root)
       : [];
 
-    for (const workflowId of ALL_WORKFLOWS) {
+    for (const workflowId of ALL_INSTALLABLE_IDS) {
       const commandPath = adapter.getFilePath(workflowId);
       const candidates = [commandPath];
       if (tool.skillsDir) {
@@ -526,7 +526,7 @@ function scanInstalledWorkflowArtifacts(
   }
 
   return {
-    workflows: ALL_WORKFLOWS.filter((workflowId) => installed.has(workflowId)),
+    workflows: ALL_INSTALLABLE_IDS.filter((workflowId) => installed.has(workflowId)),
     hasSkills,
     hasCommands,
   };
@@ -585,9 +585,15 @@ export function migrateIfNeeded(projectPath: string, tools: AIToolOption[]): voi
     return;
   }
 
-  // Scan for installed workflows
+  // Scan for installed workflows. The installed set includes required
+  // utilities (models) alongside selectable workflows; config.workflows is
+  // the user's workflow selection, so record only the selectable ones — a
+  // utility is implicit and would otherwise be presented as a removable
+  // choice in the profile picker.
   const artifacts = scanInstalledWorkflowArtifacts(projectPath, tools, true);
-  const installedWorkflows = artifacts.workflows;
+  const installedWorkflows = artifacts.workflows.filter((workflow) =>
+    (ALL_WORKFLOWS as readonly string[]).includes(workflow)
+  );
 
   if (installedWorkflows.length === 0) {
     // No workflows installed, new user — defaults will apply

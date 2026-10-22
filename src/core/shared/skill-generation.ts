@@ -17,6 +17,7 @@ import {
   getVerifyChangeSkillTemplate,
   getOnboardSkillTemplate,
   getOpsxProposeSkillTemplate,
+  getOpsxModelsSkillTemplate,
   getOpsxExploreCommandTemplate,
   getOpsxNewCommandTemplate,
   getOpsxContinueCommandTemplate,
@@ -29,6 +30,7 @@ import {
   getOpsxVerifyCommandTemplate,
   getOpsxOnboardCommandTemplate,
   getOpsxProposeCommandTemplate,
+  getOpsxModelsCommandTemplate,
   type SkillTemplate,
 } from '../templates/skill-templates.js';
 import type { CommandContent } from '../command-generation/index.js';
@@ -36,7 +38,7 @@ import {
   assertWorkflowConditionalsResolved,
   resolveOptionalWorkflows,
 } from '../templates/optional-workflow.js';
-import { ALL_WORKFLOWS } from '../profiles.js';
+import { ALL_WORKFLOWS, withRequiredUtilities } from '../profiles.js';
 import { OPENSPEC_CLI_ALLOWED_TOOLS } from './allowed-tools.js';
 
 /**
@@ -49,12 +51,14 @@ import { OPENSPEC_CLI_ALLOWED_TOOLS } from './allowed-tools.js';
  * workflow out of every generated file (#1734, umbrella #919).
  *
  * With no filter, every workflow is installed (that is what an unfiltered call
- * means), so the installed branch is kept.
+ * means), so the installed branch is kept. The required utilities (see
+ * profiles.ts) are always part of the effective set — a raw subset must not
+ * drop them, and generation must always emit them.
  */
 function resolveInstalledWorkflows(
   workflowFilter?: readonly string[]
 ): ReadonlySet<string> {
-  return new Set<string>(workflowFilter ?? ALL_WORKFLOWS);
+  return new Set<string>(withRequiredUtilities(workflowFilter ?? ALL_WORKFLOWS));
 }
 
 /**
@@ -93,6 +97,7 @@ export function getSkillTemplates(workflowFilter?: readonly string[]): SkillTemp
     { template: getVerifyChangeSkillTemplate(), dirName: 'openspec-verify-change', workflowId: 'verify' },
     { template: getOnboardSkillTemplate(), dirName: 'openspec-onboard', workflowId: 'onboard' },
     { template: getOpsxProposeSkillTemplate(), dirName: 'openspec-propose', workflowId: 'propose' },
+    { template: getOpsxModelsSkillTemplate(), dirName: 'openspec-models', workflowId: 'models' },
   ];
 
   const installed = resolveInstalledWorkflows(workflowFilter);
@@ -126,6 +131,7 @@ export function getCommandTemplates(workflowFilter?: readonly string[]): Command
     { template: getOpsxVerifyCommandTemplate(), id: 'verify' },
     { template: getOpsxOnboardCommandTemplate(), id: 'onboard' },
     { template: getOpsxProposeCommandTemplate(), id: 'propose' },
+    { template: getOpsxModelsCommandTemplate(), id: 'models' },
   ];
 
   const installed = resolveInstalledWorkflows(workflowFilter);
