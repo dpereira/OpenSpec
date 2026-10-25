@@ -28,6 +28,8 @@ export interface OpenCodeTierAssetStatus {
   pluginInstalled: boolean;
   /** All managed assets are on disk and match the current generator. */
   installed: boolean;
+  /** Assets match the current generator; this does not attest host activation. */
+  routingReady: boolean;
   /**
    * No managed assets (or only stale ones) are present, so skills should fall
    * back to requesting models in delegation prompts.
@@ -131,6 +133,7 @@ export function readOpenCodeTierAssetStatus(projectPath: string): OpenCodeTierAs
     agentsInstalled,
     pluginInstalled,
     installed: both,
+    routingReady: both,
     advisoryOnly: !both,
   };
 }

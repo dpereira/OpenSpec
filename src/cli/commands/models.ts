@@ -15,6 +15,8 @@ export function registerModelsCommand(program: Command): void {
     .option('--model <id>', 'Host model id for --tier')
     .option('--effort <effort>', 'Reasoning effort for --tier')
     .option('--note <text>', 'Optional note recorded with the selection')
+    .option('--slot <slot>', 'Slot to set: primary | secondary', 'primary')
+    .option('--clear-secondary', 'Clear the tier secondary selection')
     .addOption(new Option('--json', 'Output as JSON').hideHelp())
     .action(async (action: string, options: ModelsOptions) => {
       const { modelsCommand } = await import('../../commands/models.js');

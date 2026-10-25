@@ -145,6 +145,12 @@ describe('command completion registry', () => {
 
   it('matches visible Commander command flags and aliases', () => {
     assertRegistryParity(program, COMMAND_REGISTRY);
+    const models = command('models');
+    expect(models?.flags.find((flag) => flag.name === 'slot')).toMatchObject({
+      takesValue: true,
+      values: ['primary', 'secondary'],
+    });
+    expect(models?.flags.map((flag) => flag.name)).toContain('clear-secondary');
   });
 
   it('uses one --store description on every lifecycle command', () => {

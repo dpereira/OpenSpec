@@ -11,6 +11,7 @@ import {
   type AgentTierId,
   type ReasoningEffort,
   AgentModelConfigError,
+  canonicalAgentModelConfigIdentity,
   isReasoningEffort,
   parseAgentModelConfig,
   readEffectiveAgentModels,
@@ -83,6 +84,35 @@ describe('agent-models', () => {
     });
   });
 
+  describe('canonicalAgentModelConfigIdentity', () => {
+    it('uses one identity for symlink, trailing separator, and dot-segment aliases', () => {
+      const dir = openSpecHome();
+      fs.writeFileSync(path.join(dir, 'models.json'), '{}');
+      const alias = path.join(tempDir, 'alias');
+      fs.symlinkSync(tempDir, alias, process.platform === 'win32' ? 'junction' : 'dir');
+      const expected = canonicalAgentModelConfigIdentity(tempDir);
+      expect(canonicalAgentModelConfigIdentity(`${alias}${path.sep}`)).toBe(expected);
+      expect(canonicalAgentModelConfigIdentity(path.join(alias, 'child', '..'))).toBe(expected);
+    });
+
+    it('resolves Windows-shaped inputs through the host path module', () => {
+      const shaped = path.win32.join('C:', 'project', 'openspec', '..');
+      expect(canonicalAgentModelConfigIdentity(shaped)).toBe(
+        canonicalAgentModelConfigIdentity(path.resolve(shaped))
+      );
+    });
+
+    it('folds case aliases only when the filesystem is case-insensitive', () => {
+      const dir = openSpecHome();
+      fs.writeFileSync(path.join(dir, 'models.json'), '{}');
+      const variant = tempDir.toUpperCase();
+      const probe = path.join(tempDir, 'CaseProbe');
+      fs.writeFileSync(probe, 'probe');
+      const insensitive = fs.existsSync(path.join(tempDir, 'caseprobe'));
+      if (insensitive) expect(canonicalAgentModelConfigIdentity(variant)).toBe(canonicalAgentModelConfigIdentity(tempDir));
+    });
+  });
+
   describe('parseAgentModelConfig', () => {
     const configPath = '/tmp/openspec-models.json';
 
@@ -102,6 +132,67 @@ describe('agent-models', () => {
       expect(parsed.version).toBe(1);
       expect(parsed.tiers.planner.model).toBe('openai/gpt-6.1-sol');
       expect(parsed.tiers.worker.effort).toBe('max');
+      expect(parsed.tiers.worker.secondary).toBeUndefined();
+    });
+
+    it('round-trips independent secondary pairings for every tier', () => {
+      const tiers = Object.fromEntries(AGENT_TIER_IDS.map((tier) => [tier, {
+        model: `primary/${tier}`, effort: 'high',
+        secondary: { model: `secondary/${tier}`, effort: 'low', note: `alternate ${tier}` },
+      }]));
+      const parsed = parseAgentModelConfig(JSON.stringify({ version: 1, tiers }), configPath);
+      expect(parsed.tiers.planner.secondary).toEqual({ model: 'secondary/planner', effort: 'low', note: 'alternate planner' });
+      expect(parsed.tiers.coordinator.secondary?.effort).toBe('low');
+      expect(parsed.tiers.worker.secondary?.effort).toBe('low');
+    });
+
+    it('preserves opaque model IDs with nested slashes and backslashes verbatim', () => {
+      const model = 'provider/nested\\namespace/family\\variant/model';
+      const parsed = parseAgentModelConfig(JSON.stringify({ tiers: {
+        planner: { model, effort: 'high', secondary: { model: `${model}/backup\\slot`, effort: 'low' } },
+        coordinator: { model: 'c', effort: 'high' },
+        worker: { model: 'w', effort: 'max' },
+      } }), configPath);
+      expect(parsed.tiers.planner.model).toBe(model);
+      expect(parsed.tiers.planner.secondary?.model).toBe(`${model}/backup\\slot`);
+    });
+
+    it('keeps legacy primary model and note normalization behavior', () => {
+      const parsed = parseAgentModelConfig(JSON.stringify({ tiers: {
+        planner: { model: '  primary/model  ', effort: 'high', note: '   ' },
+        coordinator: { model: 'c', effort: 'high', note: 42 },
+        worker: { model: 'w', effort: 'max' },
+      } }), configPath);
+      expect(parsed.tiers.planner.model).toBe('primary/model');
+      expect(parsed.tiers.planner.note).toBeUndefined();
+      expect(parsed.tiers.coordinator.note).toBeUndefined();
+    });
+
+    it('rejects malformed secondary pairings with field-specific errors', () => {
+      const config = (secondary: unknown) => ({ tiers: {
+        planner: { model: 'primary', effort: 'high', secondary },
+        coordinator: { model: 'c', effort: 'high' },
+        worker: { model: 'w', effort: 'max' },
+      } });
+      expect(() => parseAgentModelConfig(JSON.stringify(config({ model: 'alternate' })), configPath))
+        .toThrow('tiers.planner.secondary.effort');
+      expect(() => parseAgentModelConfig(JSON.stringify(config({ effort: 'low' })), configPath))
+        .toThrow('tiers.planner.secondary.model');
+      expect(() => parseAgentModelConfig(JSON.stringify(config(null)), configPath))
+        .toThrow('tiers.planner.secondary must be an object');
+      expect(() => parseAgentModelConfig(JSON.stringify(config({ model: 'alternate', effort: 'low', note: 7 })), configPath))
+        .toThrow('tiers.planner.secondary.note');
+      expect(() => parseAgentModelConfig(JSON.stringify(config({ model: 'alternate', effort: 'ultra' })), configPath))
+        .toThrow('tiers.planner.secondary.effort');
+    });
+
+    it('rejects identical primary and secondary model IDs', () => {
+      const raw = JSON.stringify({ tiers: {
+        planner: { model: 'same/model', effort: 'high', secondary: { model: 'same/model', effort: 'low' } },
+        coordinator: { model: 'c', effort: 'high' },
+        worker: { model: 'w', effort: 'max' },
+      } });
+      expect(() => parseAgentModelConfig(raw, configPath)).toThrow('tiers.planner.secondary.model must differ');
     });
 
     it('rejects invalid JSON', () => {
@@ -180,6 +271,43 @@ describe('agent-models', () => {
   });
 
   describe('saveAgentModels', () => {
+    it('creates secondaries only with model and explicit effort; updates and clears independently', () => {
+      openSpecHome();
+      expect(() => saveAgentModels({ startPath: tempDir, patch: { worker: { secondary: { model: 'backup' } } } }))
+        .toThrow('requires model and explicit effort');
+      saveAgentModels({ startPath: tempDir, patch: {
+        planner: { secondary: { model: 'planner-backup', effort: 'low', note: 'backup note' } },
+        worker: { secondary: { model: 'worker-backup', effort: 'medium', note: 'worker note' } },
+      } });
+      const changed = saveAgentModels({ startPath: tempDir, patch: {
+        planner: { secondary: { effort: 'high' } },
+        worker: { clearSecondary: true },
+      } });
+      expect(changed.tiers.planner.secondary).toEqual({ model: 'planner-backup', effort: 'high' });
+      expect(changed.tiers.worker.secondary).toBeUndefined();
+      expect(changed.tiers.planner.model).toBe(DEFAULT_TIER_SELECTIONS.planner.model);
+      expect(changed.tiers.coordinator).toEqual(DEFAULT_TIER_SELECTIONS.coordinator);
+    });
+
+    it('preserves a secondary across primary patches and rejects duplicate IDs on every write', () => {
+      openSpecHome();
+      saveAgentModels({ startPath: tempDir, patch: { worker: { secondary: { model: 'backup', effort: 'low' } } } });
+      expect(saveAgentModels({ startPath: tempDir, patch: { worker: { model: 'new-primary' } } }).tiers.worker.secondary)
+        .toEqual({ model: 'backup', effort: 'low' });
+      expect(() => saveAgentModels({ startPath: tempDir, patch: { worker: { model: 'backup' } } }))
+        .toThrow('must differ');
+      expect(() => saveAgentModels({ startPath: tempDir, patch: { worker: { secondary: { model: 'new-primary', effort: 'high' } } } }))
+        .toThrow('must differ');
+    });
+
+    it('retains legacy files with or without secondaries', () => {
+      openSpecHome();
+      saveAgentModels({ startPath: tempDir });
+      expect(readEffectiveAgentModels(tempDir).tiers.worker.secondary).toBeUndefined();
+      saveAgentModels({ startPath: tempDir, patch: { planner: { secondary: { model: 'alternate', effort: 'low' } } } });
+      expect(readEffectiveAgentModels(tempDir).tiers.planner.secondary?.model).toBe('alternate');
+    });
+
     it('round-trips every tier and effort', () => {
       openSpecHome();
       const patch = {} as Partial<Record<AgentTierId, { model: string; effort: ReasoningEffort }>>;

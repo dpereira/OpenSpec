@@ -33,14 +33,18 @@ In both branches, never create the root as a side effect: do not run `openspec i
   "version": 1,
   "updated": "<ISO timestamp>",
   "tiers": {
-    "planner":     { "model": "<host model id>", "effort": "high", "note": "optional" },
-    "coordinator": { "model": "<host model id>", "effort": "high", "note": "optional" },
-    "worker":      { "model": "<host model id>", "effort": "max",  "note": "optional" }
+    "planner":     { "model": "<primary model id>", "effort": "high", "note": "optional", "secondary": { "model": "<different model id>", "effort": "medium", "note": "optional" } },
+    "coordinator": { "model": "<primary model id>", "effort": "high", "note": "optional" },
+    "worker":      { "model": "<primary model id>", "effort": "max",  "note": "optional" }
   }
 }
 ```
 
 Valid efforts: `default`, `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`. `default` keeps the model's own reasoning setting — use it for models that expose only a thinking toggle. Model IDs are host-specific opaque strings (for example `openai/gpt-6.1-sol` or `deepinfra/XiaomiMiMo/MiMo-V2.6-Pro`).
+
+Each tier keeps its existing primary fields and may add its own optional `secondary: { model, effort, note? }`. Select primary and secondary independently; each effort is explicit and belongs to that pairing. The model IDs in a tier's pair must differ. No secondary is selected by default; an unconfigured secondary leaves the tier primary-only with existing host behavior.
+
+**Fixed routing policy (where a verified native host enforces it)**: Each dispatch runs entirely on one admitted model using the host's own retry sequence; routing adds no retry budget or in-dispatch model switching. Persistent consistent availability failures move later dispatches to the configured secondary: consistent observations within a retried dispatch, or two consecutive un-retried failed dispatches. A single un-retried failure never moves the tier. The pairing then enters a 300-second cooldown so later dispatches use secondary; after expiry exactly one real dispatch probes primary recovery. Failed work is reported and never replayed or resubmitted. There is no tertiary or nearest-unconfigured substitute. Availability categories are authentication, credits/quota, unavailable model, transport, rate limit, overload, and server failure. Task/tool failures, refusals, answer quality, invalid requests, context limits, cancellation, and unknown errors never move the tier.
 
 **Steps**
 
@@ -66,10 +70,7 @@ Valid efforts: `default`, `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `
 
 5. **Persist.** Write the complete `models.json` (all three tiers, schema above) to the resolved root. Do not create a missing `openspec/` directory as a side effect — that is what the **Project check** guards. If the existing file cannot be parsed, do not overwrite it blindly: report the parse error and ask before replacing it.
 
-6. **Report activation.** State each tier's model/effort, the file path, and one of:
-   - **Active now** — the host routes tiered delegation from this file per dispatch (e.g. the OpenCode tier bridge is installed): later delegations in this session use the new selection.
-   - **Restart required** — the native integration (agents/plugin) was just installed or changed: the user must restart the host once; after that, editing only this file takes effect on subsequent delegations without restarting.
-   - **Advisory only** — this host has no native tier routing: skills will request these models/efforts in delegation prompts and report when the host cannot apply them.
+6. **Report activation truthfully.** Distinguish **advisory** (the host cannot enforce the routing policy), **restart required** (native assets were just installed or changed), and **native** only when a verified host contract enforces the policy. On-disk assets prove installation readiness only, not that a running host loaded them or is enforcing anything. Report runtime enforcement only when the host can attest it; never infer or fabricate runtime health. Without verified native enforcement, describe the policy as guidance, not active routing.
 
 **Commands**
 
