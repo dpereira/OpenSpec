@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
+import { pathToFileURL } from 'node:url';
 
 import {
   OPENCODE_AGENT_TIER,
@@ -75,6 +76,98 @@ describe('opencode tier assets', () => {
       const plugin = getOpenCodeModelRouterPluginSource();
       expect(plugin).toContain('next.variant = selection.effort');
       expect(plugin).toContain(`selection.effort !== 'default'`);
+    });
+
+    it('splits host model ids on the first slash, as the host does', () => {
+      const plugin = getOpenCodeModelRouterPluginSource();
+      expect(plugin).toContain(`selection.model.indexOf('/')`);
+      expect(plugin).not.toContain(`selection.model.lastIndexOf('/')`);
+    });
+  });
+
+  describe('model router plugin behavior', () => {
+    let cwd: string;
+
+    beforeEach(() => {
+      cwd = process.cwd();
+    });
+
+    afterEach(() => {
+      process.chdir(cwd);
+    });
+
+    async function routeModel(
+      model: string,
+      effort: string,
+      agent: string = OPENCODE_TIER_AGENTS.worker
+    ): Promise<unknown> {
+      installOpenCodeTierAssets(project);
+      fs.mkdirSync(path.join(project, 'openspec'), { recursive: true });
+      fs.writeFileSync(
+        path.join(project, 'openspec', 'models.json'),
+        `${JSON.stringify({
+          version: 1,
+          updated: '2026-01-01T00:00:00.000Z',
+          tiers: {
+            planner: { model: 'openai/gpt-6.1-sol', effort: 'high' },
+            coordinator: { model: 'openai/gpt-6.1-sol', effort: 'high' },
+            worker: { model, effort },
+          },
+        })}\n`
+      );
+      fs.writeFileSync(path.join(project, 'package.json'), '{"type":"module"}\n');
+      process.chdir(project);
+
+      const pluginPath = path.join(project, '.opencode', 'plugins', 'openspec-model-router.js');
+      const mod = (await import(/* @vite-ignore */ pathToFileURL(pluginPath).href)) as {
+        OpenSpecModelRouter: () => Promise<{
+          'chat.message': (
+            input: unknown,
+            output: { message: Record<string, unknown> }
+          ) => Promise<void>;
+        }>;
+      };
+      const plugin = await mod.OpenSpecModelRouter();
+      const message: Record<string, unknown> = { role: 'user', agent };
+      await plugin['chat.message'](null, { message });
+      return message.model;
+    }
+
+    it('routes nested ids with the provider as the first segment', async () => {
+      expect(await routeModel('deepinfra/XiaomiMiMo/MiMo-V2.6-Flash', 'high')).toEqual({
+        providerID: 'deepinfra',
+        modelID: 'XiaomiMiMo/MiMo-V2.6-Flash',
+        variant: 'high',
+      });
+      expect(await routeModel('openrouter/openai/gpt-5.6-sol', 'medium')).toEqual({
+        providerID: 'openrouter',
+        modelID: 'openai/gpt-5.6-sol',
+        variant: 'medium',
+      });
+    });
+
+    it('routes plain provider/model ids unchanged', async () => {
+      expect(await routeModel('openai/gpt-6-luna', 'max')).toEqual({
+        providerID: 'openai',
+        modelID: 'gpt-6-luna',
+        variant: 'max',
+      });
+    });
+
+    it('omits the variant when the effort is the model default', async () => {
+      expect(await routeModel('deepinfra/XiaomiMiMo/MiMo-V2.6-Flash', 'default')).toEqual({
+        providerID: 'deepinfra',
+        modelID: 'XiaomiMiMo/MiMo-V2.6-Flash',
+      });
+    });
+
+    it('leaves unmanaged agents and unusable ids untouched', async () => {
+      expect(
+        await routeModel('deepinfra/XiaomiMiMo/MiMo-V2.6-Flash', 'high', 'general')
+      ).toBeUndefined();
+      expect(await routeModel('nslash', 'high')).toBeUndefined();
+      expect(await routeModel('/x', 'high')).toBeUndefined();
+      expect(await routeModel('x/', 'high')).toBeUndefined();
     });
   });
 

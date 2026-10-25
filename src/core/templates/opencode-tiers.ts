@@ -152,7 +152,7 @@ export const OpenSpecModelRouter = async () => ({
     const selection = selections && selections[tier];
     if (!selection || typeof selection.model !== 'string' || selection.model.trim() === '') return;
 
-    const slash = selection.model.lastIndexOf('/');
+    const slash = selection.model.indexOf('/');
     if (slash <= 0 || slash === selection.model.length - 1) return;
 
     const next = {
