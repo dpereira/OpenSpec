@@ -45,6 +45,7 @@ describe('opencode tier assets', () => {
         expect(source).toContain('mode: subagent');
         expect(source).toMatch(/^model: \S+/m);
       }
+      expect(getOpenCodeTierAgentSource('coordinator')).toMatch(/^model: openai\/gpt-6\.1-sol$/m);
     });
 
     it('forbid the worker from delegating', () => {

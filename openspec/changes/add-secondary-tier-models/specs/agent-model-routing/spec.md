@@ -26,6 +26,19 @@ The system SHALL allow each planner, coordinator, and worker tier to have its ex
 - WHEN a model ID contains provider-specific text or embedded slashes
 - THEN configuration preserves the complete ID verbatim, including embedded slashes in the model name
 
+### Requirement: Advisory default model pairings
+
+When `openspec/models.json` is absent, the system SHALL expose the configured advisory primary/secondary pairs for each tier without writing a project configuration file.
+
+#### Scenario: Default pairings when no project file exists
+- WHEN the project has no `openspec/models.json`
+- THEN the advisory pairs are planner `openai/gpt-6.1-sol`/high → `deepinfra/XiaomiMiMo/MiMo-V2.6-Pro`/high, coordinator `openai/gpt-6.1-sol`/medium → `deepinfra/XiaomiMiMo/MiMo-V2.6-Pro`/high, and worker `openai/gpt-6-luna`/max → `deepinfra/XiaomiMiMo/MiMo-V2.6-Flash`/high
+- AND reading the effective selections does not create or modify `openspec/models.json`
+
+#### Scenario: Existing primary-only file keeps its selections
+- WHEN an existing version-1 configuration contains only a tier's primary selection
+- THEN it remains usable without migration and advisory defaults do not fill in that tier's secondary
+
 ### Requirement: Model configuration commands
 
 The `openspec models set` command SHALL support `--slot primary|secondary` with `primary` as the default and `--clear-secondary --tier`; existing `show`, `set`, and `reset` meanings SHALL remain compatible, and updates SHALL preserve unrelated selections.

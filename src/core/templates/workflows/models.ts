@@ -25,16 +25,16 @@ ${PROJECT_ROOT_GUARD}
   "version": 1,
   "updated": "<ISO timestamp>",
   "tiers": {
-    "planner":     { "model": "<primary model id>", "effort": "high", "note": "optional", "secondary": { "model": "<different model id>", "effort": "medium", "note": "optional" } },
-    "coordinator": { "model": "<primary model id>", "effort": "high", "note": "optional" },
-    "worker":      { "model": "<primary model id>", "effort": "max",  "note": "optional" }
+    "planner":     { "model": "openai/gpt-6.1-sol", "effort": "high", "secondary": { "model": "deepinfra/XiaomiMiMo/MiMo-V2.6-Pro", "effort": "high" } },
+    "coordinator": { "model": "openai/gpt-6.1-sol", "effort": "medium", "secondary": { "model": "deepinfra/XiaomiMiMo/MiMo-V2.6-Pro", "effort": "high" } },
+    "worker":      { "model": "openai/gpt-6-luna", "effort": "max", "secondary": { "model": "deepinfra/XiaomiMiMo/MiMo-V2.6-Flash", "effort": "high" } }
   }
 }
 \`\`\`
 
 Valid efforts: \`default\`, \`none\`, \`minimal\`, \`low\`, \`medium\`, \`high\`, \`xhigh\`, \`max\`. \`default\` keeps the model's own reasoning setting — use it for models that expose only a thinking toggle. Model IDs are host-specific opaque strings (for example \`openai/gpt-6.1-sol\` or \`deepinfra/XiaomiMiMo/MiMo-V2.6-Pro\`).
 
-Each tier keeps its existing primary fields and may add its own optional \`secondary: { model, effort, note? }\`. Select primary and secondary independently; each effort is explicit and belongs to that pairing. The model IDs in a tier's pair must differ. No secondary is selected by default; an unconfigured secondary leaves the tier primary-only with existing host behavior.
+Each tier keeps its primary fields and may configure its own \`secondary: { model, effort, note? }\`. The advisory defaults below include both pairings when \`models.json\` is absent; they remain advisory until the user confirms persistence. Existing project files without a secondary remain primary-only until the user configures one. Select primary and secondary independently; each effort belongs to that pairing, and the IDs in a tier's pair must differ.
 
 **Fixed routing policy (where a verified native host enforces it)**: Each dispatch runs entirely on one admitted model using the host's own retry sequence; routing adds no retry budget or in-dispatch model switching. Persistent consistent availability failures move later dispatches to the configured secondary: consistent observations within a retried dispatch, or two consecutive un-retried failed dispatches. A single un-retried failure never moves the tier. The pairing then enters a 300-second cooldown so later dispatches use secondary; after expiry exactly one real dispatch probes primary recovery. Failed work is reported and never replayed or resubmitted. There is no tertiary or nearest-unconfigured substitute. Availability categories are authentication, credits/quota, unavailable model, transport, rate limit, overload, and server failure. Task/tool failures, refusals, answer quality, invalid requests, context limits, cancellation, and unknown errors never move the tier.
 
@@ -42,11 +42,11 @@ Each tier keeps its existing primary fields and may add its own optional \`secon
 
 1. **Locate the configuration.** Resolve the OpenSpec root (\`openspec context --json\`, with \`--store <id>\` when one is selected) and read \`<root.path>/openspec/models.json\`. If no root exists, follow the **Project check** above rather than creating one. If the file is absent, start from these advisory defaults and tell the user the file will be created:
 
-   | Tier | Responsibility | Default model | Effort | Verified effort ladder |
-   | --- | --- | --- | --- | --- |
-   | planner | scope, architecture, dependency decomposition, acceptance criteria, hard reconciliation | \`openai/gpt-6.1-sol\` | high | low · medium · high · xhigh · max (Claude Opus 5.5: same; Gemini 4 Argon: low · medium · **high only**) |
-   | coordinator | dispatch, joins, ownership, shared-state writes, verification | \`deepinfra/XiaomiMiMo/MiMo-V2.6-Pro\` | high | toggle-only natively; **high is the ceiling** where an effort ladder exists (no max) |
-   | worker | one bounded execution unit, never delegates | \`openai/gpt-6-luna\` | max | none · low · medium · high · xhigh · max |
+   | Tier | Responsibility | Default primary | Effort | Default secondary | Effort | Verified effort ladders |
+   | --- | --- | --- | --- | --- | --- | --- |
+   | planner | scope, architecture, dependency decomposition, acceptance criteria, hard reconciliation | \`openai/gpt-6.1-sol\` | high | \`deepinfra/XiaomiMiMo/MiMo-V2.6-Pro\` | high | OpenAI: low · medium · high · xhigh · **max**; MiMo ceiling is **high** (no max) |
+   | coordinator | dispatch, joins, ownership, shared-state writes, verification | \`openai/gpt-6.1-sol\` | medium | \`deepinfra/XiaomiMiMo/MiMo-V2.6-Pro\` | high | OpenAI: low · medium · high · xhigh · **max**; MiMo ceiling is **high** (no max) |
+   | worker | one bounded execution unit, never delegates | \`openai/gpt-6-luna\` | max | \`deepinfra/XiaomiMiMo/MiMo-V2.6-Flash\` | high | Luna: none · low · medium · high · xhigh · **max**; MiMo Flash ceiling is **high** |
 
    Other verified pairings: Claude Haiku 5.5 (low→max), DeepSeek V4.1 Flash 1017 (none · low · high · **max**, no medium), MiMo-V2.6-Flash (same ceiling as MiMo-V2.6-Pro: **high**).
 
@@ -58,7 +58,7 @@ Each tier keeps its existing primary fields and may add its own optional \`secon
    - Let the user pick or type an exact model ID. Ask about effort only after the model is chosen, and offer only values that model actually supports plus \`default\`.
    - Never accept an effort outside the chosen model's ladder: correct it and say what is available.
 
-4. **Confirm the full mapping** in one table (tier → model → effort) before writing.
+4. **Confirm the full mapping** in one table (tier → primary model/effort → secondary model/effort) before writing.
 
 5. **Persist.** Write the complete \`models.json\` (all three tiers, schema above) to the resolved root. Do not create a missing \`openspec/\` directory as a side effect — that is what the **Project check** guards. If the existing file cannot be parsed, do not overwrite it blindly: report the parse error and ask before replacing it.
 

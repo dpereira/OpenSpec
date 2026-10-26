@@ -84,9 +84,24 @@ export interface AgentModelConfig {
  * vocabulary the ceiling is noted in templates/workflows/delegation.ts.
  */
 export const DEFAULT_TIER_SELECTIONS: Record<AgentTierId, TierModelSelection> = {
-  planner: { model: 'openai/gpt-6.1-sol', effort: 'high', note: 'high/xhigh/max; Gemini 4 Argon tops out at high' },
-  coordinator: { model: 'deepinfra/XiaomiMiMo/MiMo-V2.6-Pro', effort: 'high', note: 'high is the MiMo ceiling; no max' },
-  worker: { model: 'openai/gpt-6-luna', effort: 'max', note: 'none/low/medium/high/xhigh/max' },
+  planner: {
+    model: 'openai/gpt-6.1-sol',
+    effort: 'high',
+    note: 'high/xhigh/max; Gemini 4 Argon tops out at high',
+    secondary: { model: 'deepinfra/XiaomiMiMo/MiMo-V2.6-Pro', effort: 'high', note: 'high is the MiMo ceiling; no max' },
+  },
+  coordinator: {
+    model: 'openai/gpt-6.1-sol',
+    effort: 'medium',
+    note: 'medium selected for coordination work',
+    secondary: { model: 'deepinfra/XiaomiMiMo/MiMo-V2.6-Pro', effort: 'high', note: 'high is the MiMo ceiling; no max' },
+  },
+  worker: {
+    model: 'openai/gpt-6-luna',
+    effort: 'max',
+    note: 'none/low/medium/high/xhigh/max',
+    secondary: { model: 'deepinfra/XiaomiMiMo/MiMo-V2.6-Flash', effort: 'high', note: 'high is the MiMo ceiling; no max' },
+  },
 };
 
 /** Source of the effective selections reported to callers. */

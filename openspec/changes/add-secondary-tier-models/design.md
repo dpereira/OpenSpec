@@ -12,23 +12,23 @@ The official OpenCode plugins documentation exposes a `session.error` event, but
 
 ### Goals
 
-- Preserve version 1 and every existing primary `{ model, effort, note? }`; add optional `secondary: { model, effort, note? }` per tier. Secondary effort is explicitly supplied when creating a secondary. Do not select provider defaults automatically, and reject identical primary and secondary model IDs.
+- Preserve version 1 and every existing primary `{ model, effort, note? }`; add optional `secondary: { model, effort, note? }` per tier. When `models.json` is absent, the effective advisory defaults are planner: `openai/gpt-6.1-sol`/high → `deepinfra/XiaomiMiMo/MiMo-V2.6-Pro`/high; coordinator: `openai/gpt-6.1-sol`/medium → `deepinfra/XiaomiMiMo/MiMo-V2.6-Pro`/high; worker: `openai/gpt-6-luna`/max → `deepinfra/XiaomiMiMo/MiMo-V2.6-Flash`/high. These defaults are not written automatically; an existing primary-only project file remains primary-only. A user-created secondary requires its own explicit effort. Reject identical primary and secondary model IDs.
 - Give CLI/workflow users independent primary and secondary selection, inspection, and clearing. Show both slots, the fixed policy, and an honest capability status, without implying live health state. Preserve unrelated slot/tier selections on patch; retain reset behavior.
-- Define a deterministic, bounded policy independently from host integration. Separate pure policy from the native adapter's lifecycle interpretation, retry ownership, quiescence, replay-safety check, structured error extraction, correlation, and probe-lease coordination.
+- Define deterministic dispatch-level persistence and session-state policy independently from host integration; the generated router observes host retry/status events and applies policy at the next dispatch admission.
 - Generate managed host assets from source templates; do not hand-edit generated `.opencode` assets. Preserve explicit managed asset lists and lookups.
-- Preserve delegation ownership/progress across routing only when the host proves continuation safe. Never replay uncertain tool side effects or silently claim partial output is safe.
+- Preserve failed-dispatch outcomes without replay or automatic resubmission; cooldown routes new work to the secondary.
 - Provide observable, secret-free transition notifications and truthful capability reporting; no durable health file or user-tunable policy.
 
 ### Non-Goals
 
-- Choosing or provisioning a default secondary/provider, guessing provider-specific model IDs, or changing primary-only host behavior.
+- Automatically writing advisory defaults into project `models.json` files, guessing provider-specific model IDs, or filling a secondary into an existing primary-only project file.
 - User-configurable retry/cooldown values, durable health persistence, answer-quality routing, or a general-purpose retry framework.
 - In-dispatch model switching, retry/resume of a failed dispatch, or automatic resubmission of failed work.
 - Capping or replacing the host's native retry ladder, or asking upstream hosts to change their APIs.
 
 ## Decisions
 
-1. **Configuration and commands.** Keep config `version: 1`. Each tier has its existing primary fields and optional `secondary`. Add `--slot primary|secondary` (default `primary`) to `set`; `openspec models set --clear-secondary --tier <tier>` clears only that tier's secondary and rejects model, effort, note, or explicit slot options. Creating a secondary requires both model and explicit effort; updating an existing secondary preserves unspecified fields. Set/clear patches preserve all other tiers and slots. `show` in human and JSON forms includes both slots, the fixed policy, and a capability statement distinguishing configured/advisory/native support; it must not expose or imply live health state. `reset` continues to remove the project config and restore advisory defaults. Reject a primary/secondary pair with the same model ID.
+1. **Configuration and commands.** Keep config `version: 1`. Each tier has its existing primary fields and optional `secondary`. If the project file is absent, effective advisory selections use the explicit primary/secondary pairs listed in Goals; do not create or write a file as a read side effect. Existing primary-only project files remain unchanged. Add `--slot primary|secondary` (default `primary`) to `set`; `openspec models set --clear-secondary --tier <tier>` clears only that tier's secondary and rejects model, effort, note, or explicit slot options. A user-created secondary requires both model and explicit effort; updating an existing secondary preserves unspecified fields. Set/clear patches preserve all other tiers and slots. `show` in human and JSON forms includes both slots, the fixed policy, and a capability statement distinguishing configured/advisory/native support; it must not expose or imply live health state. `reset` continues to remove the project config and restore the advisory defaults. Reject a primary/secondary pair with the same model ID.
 
 2. **Availability evidence and persistence.** Each dispatch runs entirely on one admitted model using the host's own retry sequence. Failure evidence accumulates per pairing: host retry observations and dispatch terminal failures are normalized into categories (authentication, credits/quota, unavailable model, transport, rate limit, overload, server). The pairing moves to secondary only with persistent evidence in one category — consistent observations across the host's retries within one dispatch (a retried dispatch already supplies several), or two consecutive failed dispatches when the host does not retry (authentication, credits/quota, model unavailable). One un-retried failure never triggers the move. A success clears the accumulated evidence. Category changes and non-qualifying failures (task/tool, refusal, quality, invalid request, context limits, cancellation, unknown) never cool a pairing down.
 
@@ -51,6 +51,7 @@ The official OpenCode plugins documentation exposes a `session.error` event, but
 ### Alternatives considered
 
 - A nested `primary` object or a required format migration would break existing consumers; additive version-1 `secondary` preserves current fields and defaults.
+- Writing the advisory pairings automatically would mutate projects merely by reading configuration; use them as effective defaults and only persist after explicit calibration.
 - Immediate failover or unlimited host retries would contradict the requested persistence threshold and bounded retry budget; one initial attempt plus two retries makes both outcomes testable.
 - Per-request fallback would repeatedly hit an unhealthy provider; a fixed session-local cooldown with one probe reduces that traffic without introducing durable health files or background requests.
 - Arbitrary closest-model substitution would bypass user selection; only the configured secondary is eligible. Primary-only configurations keep their current host behavior.

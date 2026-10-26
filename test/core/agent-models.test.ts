@@ -273,6 +273,7 @@ describe('agent-models', () => {
   describe('saveAgentModels', () => {
     it('creates secondaries only with model and explicit effort; updates and clears independently', () => {
       openSpecHome();
+      saveAgentModels({ startPath: tempDir, patch: { worker: { clearSecondary: true } } });
       expect(() => saveAgentModels({ startPath: tempDir, patch: { worker: { secondary: { model: 'backup' } } } }))
         .toThrow('requires model and explicit effort');
       saveAgentModels({ startPath: tempDir, patch: {
@@ -301,11 +302,20 @@ describe('agent-models', () => {
     });
 
     it('retains legacy files with or without secondaries', () => {
-      openSpecHome();
-      saveAgentModels({ startPath: tempDir });
+      const dir = openSpecHome();
+      const legacyTiers = Object.fromEntries(AGENT_TIER_IDS.map((tier) => {
+        const { model, effort, note } = DEFAULT_TIER_SELECTIONS[tier];
+        return [tier, { model, effort, ...(note ? { note } : {}) }];
+      }));
+      fs.writeFileSync(path.join(dir, 'models.json'), JSON.stringify({
+        version: 1,
+        updated: '2026-01-01T00:00:00.000Z',
+        tiers: legacyTiers,
+      }));
       expect(readEffectiveAgentModels(tempDir).tiers.worker.secondary).toBeUndefined();
       saveAgentModels({ startPath: tempDir, patch: { planner: { secondary: { model: 'alternate', effort: 'low' } } } });
       expect(readEffectiveAgentModels(tempDir).tiers.planner.secondary?.model).toBe('alternate');
+      expect(readEffectiveAgentModels(tempDir).tiers.worker.secondary).toBeUndefined();
     });
 
     it('round-trips every tier and effort', () => {
@@ -375,14 +385,41 @@ describe('agent-models', () => {
         const selection = DEFAULT_TIER_SELECTIONS[tier];
         expect(selection.model).toBeTruthy();
         expect(isReasoningEffort(selection.effort)).toBe(true);
+        expect(selection.secondary?.model).toBeTruthy();
+        expect(isReasoningEffort(selection.secondary?.effort)).toBe(true);
+        expect(selection.secondary?.model).not.toBe(selection.model);
       }
     });
 
     it('use only efforts within each default model ladder', () => {
       // Verified against the providers' published reasoning ladders.
       expect(DEFAULT_TIER_SELECTIONS.planner.effort).toBe('high'); // Sol: low..max
-      expect(DEFAULT_TIER_SELECTIONS.coordinator.effort).toBe('high'); // MiMo Pro: ceiling high
+      expect(DEFAULT_TIER_SELECTIONS.coordinator.effort).toBe('medium'); // Sol: low..max
       expect(DEFAULT_TIER_SELECTIONS.worker.effort).toBe('max'); // Luna: none..max
+      expect(DEFAULT_TIER_SELECTIONS.planner.secondary).toMatchObject({
+        model: 'deepinfra/XiaomiMiMo/MiMo-V2.6-Pro', effort: 'high',
+      });
+      expect(DEFAULT_TIER_SELECTIONS.coordinator.secondary).toMatchObject({
+        model: 'deepinfra/XiaomiMiMo/MiMo-V2.6-Pro', effort: 'high',
+      });
+      expect(DEFAULT_TIER_SELECTIONS.worker.secondary).toMatchObject({
+        model: 'deepinfra/XiaomiMiMo/MiMo-V2.6-Flash', effort: 'high',
+      });
+    });
+
+    it('matches the requested default primary and secondary matrix', () => {
+      expect(DEFAULT_TIER_SELECTIONS.planner).toMatchObject({
+        model: 'openai/gpt-6.1-sol', effort: 'high',
+        secondary: { model: 'deepinfra/XiaomiMiMo/MiMo-V2.6-Pro', effort: 'high' },
+      });
+      expect(DEFAULT_TIER_SELECTIONS.coordinator).toMatchObject({
+        model: 'openai/gpt-6.1-sol', effort: 'medium',
+        secondary: { model: 'deepinfra/XiaomiMiMo/MiMo-V2.6-Pro', effort: 'high' },
+      });
+      expect(DEFAULT_TIER_SELECTIONS.worker).toMatchObject({
+        model: 'openai/gpt-6-luna', effort: 'max',
+        secondary: { model: 'deepinfra/XiaomiMiMo/MiMo-V2.6-Flash', effort: 'high' },
+      });
     });
   });
 });

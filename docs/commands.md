@@ -688,7 +688,7 @@ AI:  Welcome to OpenSpec!
 
 Calibrate independent primary and optional secondary model/effort pairings for OpenSpec's three delegation tiers: **planner** (scope, architecture, dependency decomposition), **coordinator** (dispatch, joins, shared-state updates, verification), and **worker** (one bounded execution unit, never delegates). Each secondary requires its own explicit effort, and its model ID must differ from that tier's primary. Legacy invocations without a slot continue to target primary.
 
-Selections are saved to `openspec/models.json` in the project's OpenSpec root. When the file is absent, workflows use the [advisory defaults](#advisory-model-tiers); without a configured secondary, behavior remains primary-only and no substitute model is selected.
+Selections are saved to `openspec/models.json` in the project's OpenSpec root. When the file is absent, workflows use the [advisory primary/secondary defaults](#advisory-model-tiers); those defaults are not written automatically. Existing project files without a secondary remain primary-only, and no substitute model is selected.
 
 **Usage:**
 ```
@@ -706,11 +706,11 @@ Each dispatch runs entirely on one admitted model and uses the host's own retry 
 
 **Advisory model tiers**
 
-| Tier | Default model | Effort | Verified effort ladder |
-|------|---------------|--------|------------------------|
-| planner | `openai/gpt-6.1-sol` | high | low · medium · high · xhigh · max |
-| coordinator | `deepinfra/XiaomiMiMo/MiMo-V2.6-Pro` | high | toggle-only natively; **high is the ceiling** where an effort ladder exists (no max) |
-| worker | `openai/gpt-6-luna` | max | none · low · medium · high · xhigh · max |
+| Tier | Default primary | Effort | Default secondary | Effort | Verified effort ladders |
+|------|----------------|--------|------------------|--------|------------------------|
+| planner | `openai/gpt-6.1-sol` | high | `deepinfra/XiaomiMiMo/MiMo-V2.6-Pro` | high | OpenAI: low · medium · high · xhigh · max; MiMo: high ceiling where an effort ladder exists |
+| coordinator | `openai/gpt-6.1-sol` | medium | `deepinfra/XiaomiMiMo/MiMo-V2.6-Pro` | high | OpenAI: low · medium · high · xhigh · max; MiMo: high ceiling where an effort ladder exists |
+| worker | `openai/gpt-6-luna` | max | `deepinfra/XiaomiMiMo/MiMo-V2.6-Flash` | high | Luna: none · low · medium · high · xhigh · max; MiMo Flash: high ceiling |
 
 These are recommendations, not an allow-list: any model the host offers is acceptable. Effort ceilings differ per model — Gemini 4 Argon tops out at **high**, MiMo-V2.6-Pro at **high**, DeepSeek V4.1 Flash 1017 has **no medium** — so the workflow only offers efforts a model actually supports.
 
