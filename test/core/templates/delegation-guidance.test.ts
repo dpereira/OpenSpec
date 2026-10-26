@@ -74,6 +74,9 @@ describe('delegation guidance', () => {
     for (const [tier, selection] of Object.entries(DEFAULT_TIER_SELECTIONS)) {
       expect(DELEGATION_TIERS, tier).toContain(selection.model);
       expect(isReasoningEffort(selection.effort)).toBe(true);
+      expect(selection.secondary).toBeDefined();
+      expect(DELEGATION_TIERS, `${tier} secondary`).toContain(selection.secondary!.model);
+      expect(isReasoningEffort(selection.secondary!.effort)).toBe(true);
     }
     // Ladder facts pinned in prose, checked against the vocabulary.
     expect(DELEGATION_TIERS).toContain('low · medium · high · xhigh · **max**');

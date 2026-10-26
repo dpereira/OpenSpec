@@ -30,7 +30,7 @@ export const OPENCODE_AGENT_TIER: Record<string, OpenCodeTier> = {
 
 const TIER_MODEL_HINT: Record<OpenCodeTier, string> = {
   planner: 'openai/gpt-6.1-sol',
-  coordinator: 'deepinfra/XiaomiMiMo/MiMo-V2.6-Pro',
+  coordinator: 'openai/gpt-6.1-sol',
   worker: 'openai/gpt-6-luna',
 };
 

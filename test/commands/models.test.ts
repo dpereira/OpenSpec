@@ -46,6 +46,7 @@ describe('openspec models command', () => {
     await modelsCommand('show', {});
     expect(output).toContain('defaults');
     expect(output).toContain(DEFAULT_TIER_SELECTIONS.planner.model);
+    expect(output).toContain(DEFAULT_TIER_SELECTIONS.planner.secondary!.model);
 
     await expect(fs.access(path.join(project, 'openspec', 'models.json'))).rejects.toThrow();
   });
