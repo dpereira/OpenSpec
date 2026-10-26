@@ -455,6 +455,16 @@ export const COMMAND_REGISTRY: CommandDefinition[] = [
         description: 'Optional note recorded with the selection',
         takesValue: true,
       },
+      {
+        name: 'slot',
+        description: 'Slot to set: primary | secondary',
+        takesValue: true,
+        values: ['primary', 'secondary'],
+      },
+      {
+        name: 'clear-secondary',
+        description: 'Clear the tier secondary selection',
+      },
     ],
   },
   {

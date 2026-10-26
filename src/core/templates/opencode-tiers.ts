@@ -118,6 +118,10 @@ const AGENT_TIER = {
 };
 
 const MANAGED = new Set(Object.keys(AGENT_TIER));
+const states = new Map();
+const sessions = new Map();
+const transitions = [];
+const COOLDOWN = 300000;
 
 function findConfigPath(startDir) {
   let dir = resolve(startDir);
@@ -135,34 +139,81 @@ function readSelections(startDir) {
   if (!configPath) return null;
   try {
     const parsed = JSON.parse(readFileSync(configPath, 'utf-8'));
-    return parsed && parsed.tiers && typeof parsed.tiers === 'object' ? parsed.tiers : null;
+    return parsed && parsed.tiers && typeof parsed.tiers === 'object' ? { tiers: parsed.tiers, identity: resolve(configPath) } : null;
   } catch {
     return null;
   }
 }
 
+function fingerprint(selection) { return JSON.stringify([selection.model, selection.effort, selection.secondary?.model ?? null, selection.secondary?.effort ?? null]); }
+function stateFor(key) { let s = states.get(key); if (!s) { s = { streak: 0, category: null, retry: null, until: 0, lease: false }; states.set(key, s); } return s; }
+function classify(value) {
+  if (value === 401 || value === 403) return 'authentication';
+  if (value === 402) return 'credits-quota';
+  if (value === 404) return 'unavailable-model';
+  if (value === 429) return 'rate-limit';
+  if (typeof value === 'number' && value >= 500 && value <= 599) return 'server';
+  const table = { 'insufficient credits': 'credits-quota', 'quota exceeded': 'credits-quota', 'model not found': 'unavailable-model', 'model_not_found': 'unavailable-model', 'overloaded': 'overload', 'overload': 'overload', 'timeout': 'transport', 'connection failed': 'transport', 'network error': 'transport' };
+  return table[String(value ?? '').toLowerCase()] || null;
+}
+function emit(slot, pair, category, state) { transitions.push({ slot, model: pair.model, effort: pair.effort, category: category || null, cooldown: state.until > Date.now() ? state.until : null, probe: state.lease }); }
+function record(scope, category, retry, success) {
+  const s = stateFor(scope.key);
+  if (success) { s.streak = 0; s.category = null; s.retry = null; if (scope.probe) { s.until = 0; s.lease = false; } return; }
+  if (!category) { s.streak = 0; s.category = null; s.retry = null; if (scope.probe) s.lease = false; return; }
+  if (retry) { if (s.retry && s.retry !== category) { s.streak = 0; s.category = null; } s.retry = category; return; }
+  const retried = !!s.retry;
+  if (retried && s.retry !== category) { s.streak = 0; s.category = null; }
+  else if (s.category !== category) { s.streak = 0; s.category = category; }
+  s.retry = null;
+  s.streak++;
+  if ((retried || s.streak >= 2) && scope.slot === 'primary') { s.until = Date.now() + COOLDOWN; s.streak = 0; emit('secondary', scope.primary, category, s); }
+  if (scope.probe) { s.lease = false; if (['authentication','credits-quota','unavailable-model','transport','rate-limit','overload','server'].includes(category)) s.until = Date.now() + COOLDOWN; }
+}
+
 export const OpenSpecModelRouter = async () => ({
-  async 'chat.message'(_input, output) {
+  getTransitions() { return transitions; },
+  async 'chat.message'(input, output) {
     const message = output && output.message;
     if (!message || message.role !== 'user') return;
     const tier = AGENT_TIER[message.agent];
     if (!tier || !MANAGED.has(message.agent)) return;
 
-    const selections = readSelections(process.cwd());
-    const selection = selections && selections[tier];
+    const config = readSelections(process.cwd());
+    const selection = config && config.tiers[tier];
     if (!selection || typeof selection.model !== 'string' || selection.model.trim() === '') return;
 
-    const slash = selection.model.indexOf('/');
-    if (slash <= 0 || slash === selection.model.length - 1) return;
-
-    const next = {
-      providerID: selection.model.slice(0, slash),
-      modelID: selection.model.slice(slash + 1),
-    };
-    if (typeof selection.effort === 'string' && selection.effort !== 'default') {
-      next.variant = selection.effort;
+    const primary = { model: selection.model, effort: selection.effort || 'default' };
+    const secondary = selection.secondary && typeof selection.secondary.model === 'string' ? { model: selection.secondary.model, effort: selection.secondary.effort || 'default' } : null;
+    let pair = primary; let slot = 'primary'; let probe = false; let key;
+    if (secondary) {
+      key = JSON.stringify([resolve(config.identity), tier, fingerprint(selection)]);
+      const s = stateFor(key); const now = Date.now();
+      if (s.until > now || s.lease) { pair = secondary; slot = 'secondary'; }
+      else if (s.until && s.until <= now) { s.lease = true; probe = true; }
+      sessions.set(String(input?.sessionID || ''), { key, tier, primary, secondary, slot, probe });
     }
+    const slash = pair.model.indexOf('/');
+    if (slash <= 0 || slash === pair.model.length - 1) return;
+    const next = { providerID: pair.model.slice(0, slash), modelID: pair.model.slice(slash + 1) };
+    if (pair.effort && pair.effort !== 'default') next.variant = pair.effort;
     message.model = next;
+    if (secondary) emit(slot, pair, null, stateFor(key));
+  },
+  async event(input) {
+    const props = input?.event?.properties || input?.properties || {};
+    const sessionID = props.sessionID || input?.event?.sessionID;
+    const scope = sessions.get(String(sessionID || ''));
+    if (!scope) return;
+    const type = input?.event?.type || input?.type || '';
+    if (type.includes('status')) {
+      const status = props.status || props;
+      if (status?.retry) record(scope, classify(status.code || status.message), true, false);
+      if (status?.completed || status?.status === 'completed') record(scope, null, false, true);
+    } else if (type.includes('error') || props.error) {
+      const error = props.error || props;
+      record(scope, classify(error.statusCode || error.status || error.code) || classify(error.message), false, false);
+    }
   },
 });
 `;

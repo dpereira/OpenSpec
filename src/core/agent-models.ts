@@ -56,12 +56,17 @@ export function isReasoningEffort(value: unknown): value is ReasoningEffort {
   return typeof value === 'string' && (REASONING_EFFORTS as readonly string[]).includes(value);
 }
 
-/** One tier's model selection. `model` is an opaque host-specific ID. */
-export interface TierModelSelection {
+/** One model/effort pairing. `model` is an opaque host-specific ID. */
+export interface TierModelPairing {
   model: string;
   effort: ReasoningEffort;
   /** Optional free-form record of why this pairing was chosen. */
   note?: string;
+}
+
+/** One tier's primary selection and optional independent secondary. */
+export interface TierModelSelection extends TierModelPairing {
+  secondary?: TierModelPairing;
 }
 
 export interface AgentModelConfig {
@@ -164,11 +169,21 @@ export function resolveAgentModelConfigPath(startPath: string = process.cwd()): 
   return path.join(start, 'openspec', AGENT_MODEL_FILE_NAME);
 }
 
+/** Stable platform-native identity for session state associated with this config location. */
+export function canonicalAgentModelConfigIdentity(startPath: string = process.cwd()): string {
+  return FileSystemUtils.canonicalizeExistingPath(path.resolve(resolveAgentModelConfigPath(startPath)));
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function validateTierSelection(tier: AgentTierId, value: unknown, configPath: string): TierModelSelection {
+function validateTierSelection(
+  tier: string,
+  value: unknown,
+  configPath: string,
+  strictNote = false
+): TierModelPairing {
   if (!isRecord(value)) {
     throw new AgentModelConfigError(`tiers.${tier} must be an object with model and effort.`, configPath);
   }
@@ -183,9 +198,27 @@ function validateTierSelection(tier: AgentTierId, value: unknown, configPath: st
       configPath
     );
   }
-  const selection: TierModelSelection = { model: model.trim(), effort };
+  const selection: TierModelPairing = { model: model.trim(), effort };
+  if (strictNote && 'note' in value && (typeof value.note !== 'string' || value.note.trim() === '')) {
+    throw new AgentModelConfigError(`tiers.${tier}.note must be a non-empty string when provided.`, configPath);
+  }
   if (typeof value.note === 'string' && value.note.trim() !== '') {
     selection.note = value.note.trim();
+  }
+  return selection;
+}
+
+function validateTierWithSecondary(tier: AgentTierId, value: unknown, configPath: string): TierModelSelection {
+  const selection: TierModelSelection = validateTierSelection(tier, value, configPath);
+  if (isRecord(value) && 'secondary' in value) {
+    const secondary = validateTierSelection(`${tier}.secondary`, value.secondary, configPath, true);
+    if (selection.model === secondary.model) {
+      throw new AgentModelConfigError(
+        `tiers.${tier}.secondary.model must differ from tiers.${tier}.model.`,
+        configPath
+      );
+    }
+    selection.secondary = secondary;
   }
   return selection;
 }
@@ -213,7 +246,7 @@ export function parseAgentModelConfig(raw: string, configPath: string): AgentMod
     if (!(tier in parsed.tiers)) {
       throw new AgentModelConfigError(`models.json is missing tiers.${tier}.`, configPath);
     }
-    tiers[tier] = validateTierSelection(tier, parsed.tiers[tier], configPath);
+    tiers[tier] = validateTierWithSecondary(tier, parsed.tiers[tier], configPath);
   }
 
   const version = typeof parsed.version === 'number' ? parsed.version : AGENT_MODEL_CONFIG_VERSION;
@@ -257,7 +290,10 @@ export function readEffectiveAgentModels(startPath: string = process.cwd()): Eff
 
 export interface SaveAgentModelOptions {
   /** Replace one tier's selection; other tiers keep their current values. */
-  patch?: Partial<Record<AgentTierId, Partial<TierModelSelection>>>;
+  patch?: Partial<Record<AgentTierId, Partial<Omit<TierModelSelection, 'secondary'>> & {
+    secondary?: Partial<TierModelPairing>;
+    clearSecondary?: boolean;
+  }>>;
   /** Timestamp override for deterministic tests. */
   now?: string;
   /** Directory to resolve the configuration path from. */
@@ -289,17 +325,39 @@ export function saveAgentModels(options: SaveAgentModelOptions = {}): AgentModel
     for (const tier of AGENT_TIER_IDS) {
       const patch = options.patch[tier];
       if (!patch) continue;
+      const existing = tiers[tier];
       const model = patch.model?.trim() || tiers[tier].model;
       const effort = patch.effort ?? tiers[tier].effort;
       // A note describes the model/effort pairing it was written for; drop it
       // when the pairing changes unless the patch supplies a fresh one.
       const note =
-        patch.note?.trim() || (model === tiers[tier].model && effort === tiers[tier].effort
-          ? tiers[tier].note
+        patch.note?.trim() || (model === existing.model && effort === existing.effort
+          ? existing.note
           : undefined);
       const merged: TierModelSelection = { model, effort };
       if (note) merged.note = note;
-      tiers[tier] = validateTierSelection(tier, merged, configPath);
+      if (patch.clearSecondary) {
+        // Explicit clear takes precedence over a secondary patch.
+      } else if (patch.secondary) {
+        const secondaryPatch = patch.secondary;
+        const oldSecondary = existing.secondary;
+        if (!oldSecondary && (!secondaryPatch.model?.trim() || !secondaryPatch.effort)) {
+          throw new AgentModelConfigError(`tiers.${tier}.secondary requires model and explicit effort when created.`, configPath);
+        }
+        const secondaryModel = secondaryPatch.model?.trim() || oldSecondary?.model;
+        const secondaryEffort = secondaryPatch.effort ?? oldSecondary?.effort;
+        if (!secondaryModel || !secondaryEffort) {
+          throw new AgentModelConfigError(`tiers.${tier}.secondary requires model and explicit effort when created.`, configPath);
+        }
+        const secondaryNote = secondaryPatch.note?.trim() ||
+          (secondaryModel === oldSecondary?.model && secondaryEffort === oldSecondary?.effort ? oldSecondary?.note : undefined);
+        const secondary: TierModelPairing = { model: secondaryModel, effort: secondaryEffort };
+        if (secondaryNote) secondary.note = secondaryNote;
+        merged.secondary = validateTierSelection(`${tier}.secondary`, secondary, configPath);
+      } else if (existing.secondary) {
+        merged.secondary = existing.secondary;
+      }
+      tiers[tier] = validateTierWithSecondary(tier, merged, configPath);
     }
   }
 

@@ -5,6 +5,7 @@ import * as os from 'node:os';
 
 import { modelsCommand } from '../../src/commands/models.js';
 import { DEFAULT_TIER_SELECTIONS } from '../../src/core/agent-models.js';
+import { installOpenCodeTierAssets } from '../../src/core/opencode-tier-assets.js';
 
 /**
  * `openspec models` is the deterministic persistence surface behind
@@ -118,5 +119,60 @@ describe('openspec models command', () => {
     await modelsCommand('reset', { json: true });
     const payload = JSON.parse(output) as { removed: boolean };
     expect(payload.removed).toBe(false);
+  });
+
+  it('sets and patches secondary independently, preserving its other fields', async () => {
+    await modelsCommand('set', { tier: 'worker', slot: 'secondary', model: 'vendor/secondary', effort: 'high', note: 'kept' });
+    await modelsCommand('set', { tier: 'worker', slot: 'secondary', model: 'vendor/secondary' });
+    expect((await readConfig()).tiers).toMatchObject({ worker: { secondary: { model: 'vendor/secondary', effort: 'high', note: 'kept' } } });
+    await modelsCommand('set', { tier: 'worker', model: 'vendor/primary', effort: 'max' });
+    expect((await readConfig()).tiers).toMatchObject({ worker: { secondary: { model: 'vendor/secondary' } } });
+  });
+
+  it('rejects identical secondary IDs and conflicting clears without writing', async () => {
+    await modelsCommand('set', { tier: 'worker', model: 'same', effort: 'high' });
+    const before = await fs.readFile(path.join(project, 'openspec', 'models.json'), 'utf-8');
+    await expect(modelsCommand('set', { tier: 'worker', slot: 'secondary', model: 'same', effort: 'high' })).rejects.toThrow(/must differ/);
+    await expect(modelsCommand('set', { tier: 'worker', clearSecondary: true, model: 'x' })).rejects.toThrow(/cannot be combined/);
+    expect(await fs.readFile(path.join(project, 'openspec', 'models.json'), 'utf-8')).toBe(before);
+  });
+
+  it('clears only the secondary and reports slots, policy, and truthful capability', async () => {
+    await modelsCommand('set', { tier: 'worker', slot: 'secondary', model: 'secondary', effort: 'high' });
+    await modelsCommand('set', { tier: 'worker', clearSecondary: true });
+    expect((await readConfig()).tiers).toMatchObject({ worker: { model: DEFAULT_TIER_SELECTIONS.worker.model } });
+    output = '';
+    await modelsCommand('show', { json: true });
+    const json = JSON.parse(output) as Record<string, unknown>;
+    expect(json.policy).toEqual({
+      dispatchModel: 'one admitted model per dispatch',
+      retrySequence: "host's own retry sequence",
+      persistenceRule: 'consistent availability observations within a retried dispatch, or two consecutive un-retried failed dispatches; one un-retried failure never moves tiers',
+      cooldownSeconds: 300,
+      recoveryProbes: 1,
+      tertiary: false,
+      resubmitsFailedWork: false,
+    });
+    expect(json.capability).toBe('advisory');
+    expect((json.tiers as Record<string, { secondary?: unknown }>).worker.secondary).toBeUndefined();
+    output = '';
+    await modelsCommand('show', {});
+    expect(output).toContain('secondary: none');
+    expect(output).toContain("one admitted model per dispatch on the host's own retry sequence");
+    expect(output).toContain('two consecutive un-retried failed dispatches; one un-retried failure never moves tiers');
+    expect(output).toContain('300s cooldown; one recovery probe; no tertiary; no resubmission of failed work');
+    expect(output).toContain('Capability: advisory');
+  });
+
+  it('reports installed host assets without claiming native enforcement', async () => {
+    installOpenCodeTierAssets(project);
+    await modelsCommand('show', { json: true });
+    const json = JSON.parse(output) as Record<string, unknown>;
+    expect(json.capability).toBe('advisory (host assets installed, activation unverified)');
+    expect(String(json.capability)).not.toContain('native');
+    output = '';
+    await modelsCommand('show', {});
+    expect(output).toContain('Capability: advisory (host assets installed, activation unverified)');
+    expect(output).not.toContain('native');
   });
 });

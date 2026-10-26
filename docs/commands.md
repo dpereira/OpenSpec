@@ -686,19 +686,23 @@ AI:  Welcome to OpenSpec!
 
 ### `/opsx:models`
 
-Calibrate which models and reasoning efforts OpenSpec's three delegation tiers use. Every workflow delegates across **planner** (scope, architecture, dependency decomposition), **coordinator** (dispatch, joins, shared-state updates, verification), and **worker** (one bounded execution unit, never delegates). This command sets the model and reasoning effort for each tier.
+Calibrate independent primary and optional secondary model/effort pairings for OpenSpec's three delegation tiers: **planner** (scope, architecture, dependency decomposition), **coordinator** (dispatch, joins, shared-state updates, verification), and **worker** (one bounded execution unit, never delegates). Each secondary requires its own explicit effort, and its model ID must differ from that tier's primary. Legacy invocations without a slot continue to target primary.
 
-Selections are saved to `openspec/models.json` in the project's OpenSpec root and take effect for subsequent delegations. When the file is absent, workflows fall back to the [advisory defaults](#advisory-model-tiers).
+Selections are saved to `openspec/models.json` in the project's OpenSpec root. When the file is absent, workflows use the [advisory defaults](#advisory-model-tiers); without a configured secondary, behavior remains primary-only and no substitute model is selected.
 
 **Usage:**
 ```
 /opsx:models                          # interactive calibration
-/opsx:models show                     # print the effective mapping
-/opsx:models reset                    # remove the file, restoring defaults
+/opsx:models show                     # print both slots, policy, and capability
+/opsx:models reset                    # remove the file, restoring advisory defaults
 /opsx:models planner=anthropic/claude-opus-5-5 high
 ```
 
-The same persistence is available from the CLI as `openspec models [show|set|reset]`, which the workflow calls so the file is validated and written by one implementation.
+The workflow uses the same persistence as the CLI, `openspec models [show|set|reset]`. Implemented CLI options are `--tier <tier>`, `--model <id>`, `--effort <effort>`, `--note <text>`, `--slot primary|secondary` (default `primary`), `--clear-secondary`, and `--json`. For example, set a secondary with `openspec models set --tier worker --slot secondary --model provider/model --effort high`; clear only that tier's secondary with `openspec models set --tier worker --clear-secondary`. Clearing does not accept model, effort, note, or explicit slot options. A secondary must be created with both model and explicit effort. Existing primary-slot calls retain their meaning and preserve any secondary.
+
+**Routing policy**
+
+Each dispatch runs entirely on one admitted model and uses the host's own retry sequence; routing does not add retries or switch models within a dispatch. Persistent, consistent availability failures move later dispatches to the configured secondary: consistent observations within a retried dispatch, or two consecutive un-retried failed dispatches in the same category. A single un-retried failure never moves the tier. The primary pairing then enters a 300-second cooldown, during which new dispatches use the secondary. After cooldown, one real dispatch probes primary recovery; concurrent dispatches continue on secondary. There is no tertiary model. Routing never replays, resumes, or resubmits failed work; a secondary dispatch is new work. If no secondary is configured, no substitute model is selected.
 
 **Advisory model tiers**
 
@@ -712,14 +716,14 @@ These are recommendations, not an allow-list: any model the host offers is accep
 
 **Activation**
 
-- **Active now** — the host routes tiered delegation from the file per dispatch (e.g. the OpenCode tier bridge is installed and loaded). Later delegations in the session use the new selection without restarting.
-- **Restart required** — the native integration was just installed or changed. After one restart, editing only `models.json` is live.
-- **Advisory only** — the host has no native tier routing. Workflows request the configured models/efforts in delegation prompts and report when the host cannot apply them.
+- **Advisory** — workflows can request configured models/efforts, but fallback and cooldown are not asserted as enforced.
+- **Restart required** — managed host assets were just installed or changed. Restart is needed before they can be loaded; files on disk prove installation readiness only, not activation or enforcement.
+- **Native** — report this only when a running adapter enforces per-dispatch routing. Installation readiness alone is not enforcement. Native enforcement is not yet verified here; until a running adapter attests it, report advisory or restart required, not native.
 
 **Tips:**
 - Runs anywhere; it never edits planning artifacts or project code
 - Guides, not hard constraints — the model table is a recommendation
-- Reports honestly which of the three activation states applies
+- Reports capability without treating installed assets as proof of live activation
 
 ---
 
